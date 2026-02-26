@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { propertyAPI, inspectionAPI } from '../lib/api';
+import { storageAPI } from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -11,24 +12,25 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
-import { Building2, Plus, Calendar, Edit, Clock, CheckCircle2, XCircle, Home, Building } from 'lucide-react';
+import { Building2, Plus, Calendar, Edit, Clock, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function AgentDashboard() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isAgent, isAdmin } = useAuth();
-  
+  const fileInputRef = useRef(null);
+
   const [properties, setProperties] = useState([]);
   const [inspections, setInspections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showPropertyDialog, setShowPropertyDialog] = useState(false);
   const [editingProperty, setEditingProperty] = useState(null);
-  
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   const [formData, setFormData] = useState({
     title: '', description: '', price: '', location: '',
     property_type: 'hostel', images: [], contact_name: '', contact_phone: '',
   });
-  const [imageUrl, setImageUrl] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -53,15 +55,51 @@ export function AgentDashboard() {
     }
   };
 
-  const handleAddImage = () => {
-    if (imageUrl && !formData.images.includes(imageUrl)) {
-      setFormData({ ...formData, images: [...formData.images, imageUrl] });
-      setImageUrl('');
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    // Max 5 images total
+    if (formData.images.length + files.length > 5) {
+      toast.error('Maximum 5 images allowed');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          toast.error(`${file.name} is not an image`);
+          continue;
+        }
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`${file.name} is too large. Max 5MB`);
+          continue;
+        }
+
+        const result = await storageAPI.uploadImage(file, 'property-images');
+        uploadedUrls.push(result.data.url);
+      }
+
+      if (uploadedUrls.length > 0) {
+        setFormData(prev => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
+        toast.success(`${uploadedUrls.length} image${uploadedUrls.length > 1 ? 's' : ''} uploaded`);
+      }
+    } catch (error) {
+      toast.error('Failed to upload image. Please try again.');
+      console.error('Upload error:', error);
+    } finally {
+      setUploadingImage(false);
+      // Reset file input so same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleRemoveImage = (index) => {
-    setFormData({ ...formData, images: formData.images.filter((_, i) => i !== index) });
+    setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
   };
 
   const resetForm = () => {
@@ -88,14 +126,14 @@ export function AgentDashboard() {
     try {
       const data = {
         ...formData, price: parseInt(formData.price),
-        images: formData.images.length > 0 ? formData.images : ['https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg'],
+        images: formData.images.length > 0 ? formData.images : [],
       };
       if (editingProperty) {
         await propertyAPI.update(editingProperty.id, data);
         toast.success('Property updated');
       } else {
         await propertyAPI.create(data, user);
-        toast.success('Property created');
+        toast.success('Property submitted for approval');
       }
       setShowPropertyDialog(false);
       resetForm();
@@ -146,13 +184,19 @@ export function AgentDashboard() {
         </TabsList>
 
         <TabsContent value="properties">
-          {loading ? <div className="space-y-4">{[1,2,3].map(i => <Card key={i} className="p-4 animate-pulse"><div className="h-24 bg-muted rounded" /></Card>)}</div> 
+          {loading ? <div className="space-y-4">{[1,2,3].map(i => <Card key={i} className="p-4 animate-pulse"><div className="h-24 bg-muted rounded" /></Card>)}</div>
           : properties.length > 0 ? (
             <div className="space-y-4">
               {properties.map((property) => (
                 <Card key={property.id} className="p-4">
                   <div className="flex gap-4">
-                    <img src={property.images?.[0] || 'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg'} alt="" className="w-32 h-24 rounded-lg object-cover" />
+                    {property.images?.[0] ? (
+                      <img src={property.images[0]} alt="" className="w-32 h-24 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-32 h-24 rounded-lg bg-muted flex items-center justify-center">
+                        <Image className="w-8 h-8 text-muted-foreground" />
+                      </div>
+                    )}
                     <div className="flex-1">
                       <div className="flex items-start justify-between">
                         <div><h3 className="font-semibold">{property.title}</h3><p className="text-sm text-muted-foreground">{property.location}</p><p className="text-primary font-bold mt-1">{formatPrice(property.price)}/year</p></div>
@@ -202,6 +246,7 @@ export function AgentDashboard() {
         </TabsContent>
       </Tabs>
 
+      {/* Property Dialog */}
       <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingProperty ? 'Edit Property' : 'Add New Property'}</DialogTitle></DialogHeader>
@@ -224,22 +269,75 @@ export function AgentDashboard() {
               <div className="space-y-2"><Label>Owner Name *</Label><Input value={formData.contact_name} onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })} placeholder="John Doe" /></div>
               <div className="space-y-2"><Label>Owner Phone *</Label><Input value={formData.contact_phone} onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })} placeholder="+234..." /></div>
             </div>
-            <div className="space-y-2">
-              <Label>Images</Label>
-              <div className="flex gap-2"><Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="Enter image URL" /><Button type="button" onClick={handleAddImage} variant="outline"><Plus className="w-4 h-4" /></Button></div>
+
+            {/* Image Upload Section */}
+            <div className="space-y-3">
+              <Label>Property Images <span className="text-muted-foreground text-xs">(max 5, up to 5MB each)</span></Label>
+
+              {/* Upload button */}
+              <div
+                onClick={() => !uploadingImage && fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
+                  ${uploadingImage ? 'opacity-50 cursor-not-allowed border-muted' : 'border-muted-foreground/25 hover:border-primary hover:bg-muted/30'}`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+                {uploadingImage ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <p className="text-sm text-muted-foreground">Uploading...</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <p className="text-sm font-medium">Click to upload images</p>
+                    <p className="text-xs text-muted-foreground">JPG, PNG, WEBP supported</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Image previews */}
               {formData.images.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                   {formData.images.map((img, index) => (
-                    <div key={index} className="relative group">
-                      <img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" />
-                      <button onClick={() => handleRemoveImage(index)} className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100"><XCircle className="w-4 h-4" /></button>
+                    <div key={index} className="relative group aspect-square">
+                      <img src={img} alt={`Property ${index + 1}`} className="w-full h-full rounded-lg object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(index)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                      {index === 0 && (
+                        <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1 rounded">Cover</span>
+                      )}
                     </div>
                   ))}
+                  {formData.images.length < 5 && (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center cursor-pointer hover:border-primary hover:bg-muted/30 transition-colors"
+                    >
+                      <Plus className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setShowPropertyDialog(false)}>Cancel</Button><Button onClick={handleSubmitProperty}>{editingProperty ? 'Update' : 'Create'} Property</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowPropertyDialog(false); resetForm(); }}>Cancel</Button>
+            <Button onClick={handleSubmitProperty} disabled={uploadingImage}>
+              {uploadingImage ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</> : <>{editingProperty ? 'Update' : 'Create'} Property</>}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
