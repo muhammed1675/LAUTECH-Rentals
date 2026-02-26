@@ -10,9 +10,27 @@ import {
   LogOut,
   Menu,
   X,
-  Building2
+  Building2,
+  ChevronDown,
+  Settings,
+  Users,
+  FileCheck,
+  Receipt,
+  Calendar,
+  Plus,
+  BadgeCheck
 } from 'lucide-react';
 import { Button } from './ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import { Avatar, AvatarFallback } from './ui/avatar';
+import { Badge } from './ui/badge';
 import { useState } from 'react';
 
 export function Layout({ children }) {
@@ -26,27 +44,14 @@ export function Layout({ children }) {
     navigate('/');
   };
 
-  const navItems = [
-    { href: '/', icon: Home, label: 'Home' },
-    { href: '/browse', icon: Search, label: 'Browse' },
-  ];
-
-  if (isAuthenticated) {
-    navItems.push({ href: '/profile', icon: User, label: 'Profile' });
-    navItems.push({ href: '/buy-tokens', icon: Coins, label: 'Tokens' });
-  }
-
-  if (isAgent) {
-    navItems.push({ href: '/agent', icon: Building2, label: 'Agent' });
-  }
-
-  if (isAdmin) {
-    navItems.push({ href: '/admin', icon: Shield, label: 'Admin' });
-  }
-
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   return (
@@ -65,31 +70,189 @@ export function Layout({ children }) {
 
             {/* Desktop Nav */}
             <nav className="flex items-center gap-1">
-              {navItems.map((item) => (
-                <Link key={item.href} to={item.href}>
-                  <Button
-                    variant={isActive(item.href) ? 'default' : 'ghost'}
-                    size="sm"
-                    className="gap-2"
-                    data-testid={`nav-${item.label.toLowerCase()}`}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    {item.label}
-                  </Button>
-                </Link>
-              ))}
-              
-              {isAuthenticated ? (
+              {/* Public Links */}
+              <Link to="/">
                 <Button
-                  variant="ghost"
+                  variant={isActive('/') && location.pathname === '/' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={handleLogout}
-                  className="gap-2 ml-2"
-                  data-testid="nav-logout"
+                  className="gap-2"
+                  data-testid="nav-home"
                 >
-                  <LogOut className="w-4 h-4" />
-                  Logout
+                  <Home className="w-4 h-4" />
+                  Home
                 </Button>
+              </Link>
+              
+              <Link to="/browse">
+                <Button
+                  variant={isActive('/browse') ? 'default' : 'ghost'}
+                  size="sm"
+                  className="gap-2"
+                  data-testid="nav-browse"
+                >
+                  <Search className="w-4 h-4" />
+                  Browse
+                </Button>
+              </Link>
+
+              {isAuthenticated && (
+                <>
+                  <Link to="/profile">
+                    <Button
+                      variant={isActive('/profile') ? 'default' : 'ghost'}
+                      size="sm"
+                      className="gap-2"
+                      data-testid="nav-profile"
+                    >
+                      <User className="w-4 h-4" />
+                      Profile
+                    </Button>
+                  </Link>
+                  
+                  <Link to="/buy-tokens">
+                    <Button
+                      variant={isActive('/buy-tokens') ? 'default' : 'ghost'}
+                      size="sm"
+                      className="gap-2"
+                      data-testid="nav-tokens"
+                    >
+                      <Coins className="w-4 h-4" />
+                      Tokens
+                    </Button>
+                  </Link>
+                </>
+              )}
+
+              {/* Agent Dropdown */}
+              {isAgent && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={isActive('/agent') ? 'default' : 'ghost'}
+                      size="sm"
+                      className="gap-2"
+                      data-testid="nav-agent"
+                    >
+                      <Building2 className="w-4 h-4" />
+                      Agent
+                      <ChevronDown className="w-3 h-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel className="flex items-center gap-2">
+                      <BadgeCheck className="w-4 h-4 text-secondary" />
+                      Agent Panel
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
+                      <LayoutDashboard className="w-4 h-4 mr-2" />
+                      Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
+                      <Building2 className="w-4 h-4 mr-2" />
+                      My Properties
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Inspections
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer text-primary">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add New Property
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              {/* Admin Dropdown */}
+              {isAdmin && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={isActive('/admin') ? 'default' : 'ghost'}
+                      size="sm"
+                      className="gap-2"
+                      data-testid="nav-admin"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Admin
+                      <ChevronDown className="w-3 h-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-destructive" />
+                      Admin Panel
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
+                      <LayoutDashboard className="w-4 h-4 mr-2" />
+                      Overview
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/admin?tab=users')} className="cursor-pointer">
+                      <Users className="w-4 h-4 mr-2" />
+                      User Management
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/admin?tab=verification')} className="cursor-pointer">
+                      <FileCheck className="w-4 h-4 mr-2" />
+                      Agent Verification
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/admin?tab=properties')} className="cursor-pointer">
+                      <Building2 className="w-4 h-4 mr-2" />
+                      Properties
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/admin?tab=inspections')} className="cursor-pointer">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Inspections
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/admin?tab=transactions')} className="cursor-pointer">
+                      <Receipt className="w-4 h-4 mr-2" />
+                      Transactions
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              
+              {/* User Menu / Auth Buttons */}
+              {isAuthenticated ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="gap-2 ml-2" data-testid="user-menu">
+                      <Avatar className="w-7 h-7">
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                          {getInitials(user?.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <ChevronDown className="w-3 h-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{user?.full_name}</span>
+                        <span className="text-xs text-muted-foreground">{user?.email}</span>
+                        <Badge variant="outline" className="w-fit mt-1 capitalize text-xs">
+                          {user?.role}
+                        </Badge>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
+                      <User className="w-4 h-4 mr-2" />
+                      My Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/buy-tokens')} className="cursor-pointer">
+                      <Coins className="w-4 h-4 mr-2" />
+                      Buy Tokens
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : (
                 <div className="flex items-center gap-2 ml-2">
                   <Link to="/login">
@@ -119,59 +282,112 @@ export function Layout({ children }) {
             <span className="font-bold text-lg tracking-tight">LAUTECH</span>
           </Link>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            data-testid="mobile-menu-toggle"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAuthenticated && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="mobile-user-menu">
+                    <Avatar className="w-8 h-8">
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                        {getInitials(user?.full_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{user?.full_name}</span>
+                      <span className="text-xs text-muted-foreground">{user?.email}</span>
+                      <Badge variant="outline" className="w-fit mt-1 capitalize text-xs">
+                        {user?.role}
+                      </Badge>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-2">
+                        <Shield className="w-3 h-3" />
+                        Admin Panel
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
+                        <LayoutDashboard className="w-4 h-4 mr-2" />
+                        Admin Dashboard
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate('/admin?tab=users')} className="cursor-pointer">
+                        <Users className="w-4 h-4 mr-2" />
+                        Manage Users
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  
+                  {isAgent && (
+                    <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-2">
+                        <BadgeCheck className="w-3 h-3" />
+                        Agent Panel
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
+                        <LayoutDashboard className="w-4 h-4 mr-2" />
+                        Agent Dashboard
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Property
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  
+                  <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
+                    <User className="w-4 h-4 mr-2" />
+                    My Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/buy-tokens')} className="cursor-pointer">
+                    <Coins className="w-4 h-4 mr-2" />
+                    Buy Tokens
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            
+            {!isAuthenticated && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                data-testid="mobile-menu-toggle"
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Mobile Menu Dropdown */}
-        {mobileMenuOpen && (
+        {/* Mobile Menu Dropdown for non-authenticated */}
+        {!isAuthenticated && mobileMenuOpen && (
           <div className="absolute top-14 left-0 right-0 glass border-b p-4 animate-fade-in">
             <div className="flex flex-col gap-2">
-              {!isAuthenticated && (
-                <div className="flex gap-2 mb-2">
-                  <Link to="/login" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" className="w-full" data-testid="mobile-login">
-                      Login
-                    </Button>
-                  </Link>
-                  <Link to="/register" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                    <Button className="w-full" data-testid="mobile-register">
-                      Register
-                    </Button>
-                  </Link>
-                </div>
-              )}
-              {isAuthenticated && (
-                <div className="flex items-center gap-3 p-3 bg-muted rounded-lg mb-2">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{user?.full_name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
-                  </div>
-                </div>
-              )}
-              {isAuthenticated && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    handleLogout();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full justify-start gap-2"
-                  data-testid="mobile-logout"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Logout
-                </Button>
-              )}
+              <div className="flex gap-2">
+                <Link to="/login" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="outline" className="w-full" data-testid="mobile-login">
+                    Login
+                  </Button>
+                </Link>
+                <Link to="/register" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
+                  <Button className="w-full" data-testid="mobile-register">
+                    Register
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         )}
@@ -185,21 +401,110 @@ export function Layout({ children }) {
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t">
         <div className="flex items-center justify-around h-16 px-2">
-          {navItems.slice(0, 5).map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
-                isActive(item.href)
-                  ? 'text-primary'
-                  : 'text-muted-foreground'
-              }`}
-              data-testid={`mobile-nav-${item.label.toLowerCase()}`}
-            >
-              <item.icon className={`w-5 h-5 ${isActive(item.href) ? 'scale-110' : ''} transition-transform`} />
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </Link>
-          ))}
+          <Link
+            to="/"
+            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+              isActive('/') && location.pathname === '/'
+                ? 'text-primary'
+                : 'text-muted-foreground'
+            }`}
+            data-testid="mobile-nav-home"
+          >
+            <Home className={`w-5 h-5 ${isActive('/') && location.pathname === '/' ? 'scale-110' : ''} transition-transform`} />
+            <span className="text-[10px] font-medium">Home</span>
+          </Link>
+          
+          <Link
+            to="/browse"
+            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+              isActive('/browse')
+                ? 'text-primary'
+                : 'text-muted-foreground'
+            }`}
+            data-testid="mobile-nav-browse"
+          >
+            <Search className={`w-5 h-5 ${isActive('/browse') ? 'scale-110' : ''} transition-transform`} />
+            <span className="text-[10px] font-medium">Browse</span>
+          </Link>
+
+          {isAuthenticated ? (
+            <>
+              <Link
+                to="/profile"
+                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                  isActive('/profile')
+                    ? 'text-primary'
+                    : 'text-muted-foreground'
+                }`}
+                data-testid="mobile-nav-profile"
+              >
+                <User className={`w-5 h-5 ${isActive('/profile') ? 'scale-110' : ''} transition-transform`} />
+                <span className="text-[10px] font-medium">Profile</span>
+              </Link>
+
+              {isAgent && (
+                <Link
+                  to="/agent"
+                  className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                    isActive('/agent')
+                      ? 'text-secondary'
+                      : 'text-muted-foreground'
+                  }`}
+                  data-testid="mobile-nav-agent"
+                >
+                  <Building2 className={`w-5 h-5 ${isActive('/agent') ? 'scale-110' : ''} transition-transform`} />
+                  <span className="text-[10px] font-medium">Agent</span>
+                </Link>
+              )}
+
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                    isActive('/admin')
+                      ? 'text-destructive'
+                      : 'text-muted-foreground'
+                  }`}
+                  data-testid="mobile-nav-admin"
+                >
+                  <Shield className={`w-5 h-5 ${isActive('/admin') ? 'scale-110' : ''} transition-transform`} />
+                  <span className="text-[10px] font-medium">Admin</span>
+                </Link>
+              )}
+
+              <Link
+                to="/buy-tokens"
+                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                  isActive('/buy-tokens')
+                    ? 'text-primary'
+                    : 'text-muted-foreground'
+                }`}
+                data-testid="mobile-nav-tokens"
+              >
+                <Coins className={`w-5 h-5 ${isActive('/buy-tokens') ? 'scale-110' : ''} transition-transform`} />
+                <span className="text-[10px] font-medium">Tokens</span>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg text-muted-foreground"
+                data-testid="mobile-nav-login"
+              >
+                <User className="w-5 h-5" />
+                <span className="text-[10px] font-medium">Login</span>
+              </Link>
+              <Link
+                to="/register"
+                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg text-primary"
+                data-testid="mobile-nav-register"
+              >
+                <Plus className="w-5 h-5" />
+                <span className="text-[10px] font-medium">Register</span>
+              </Link>
+            </>
+          )}
         </div>
       </nav>
     </div>
