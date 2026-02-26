@@ -8,23 +8,66 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const loadUserProfile = useCallback(async (userId) => {
+  const loadUserProfile = useCallback(async (authUser) => {
     try {
+      // Try to load existing profile
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId)
+        .eq('id', authUser.id)
         .single();
-      
+
+      if (error && error.code === 'PGRST116') {
+        // Profile doesn't exist yet (trigger may not have fired)
+        // Create it from auth user data
+        const { data: newProfile, error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: authUser.id,
+            email: authUser.email,
+            full_name: authUser.user_metadata?.full_name || authUser.email.split('@')[0],
+            role: 'user',
+            suspended: false
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Profile creation failed:', insertError);
+          // One more attempt to read (trigger might have created it between our read and write)
+          const { data: retryData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', authUser.id)
+            .single();
+          if (retryData) {
+            const { data: wallet } = await supabase
+              .from('wallets')
+              .select('token_balance')
+              .eq('user_id', authUser.id)
+              .single();
+            return { ...retryData, token_balance: wallet?.token_balance || 0 };
+          }
+          return null;
+        }
+
+        // Also create wallet if profile was created
+        await supabase
+          .from('wallets')
+          .insert({ user_id: authUser.id, token_balance: 0 });
+
+        return { ...newProfile, token_balance: 0 };
+      }
+
       if (error) throw error;
-      
+
       // Get wallet balance
       const { data: wallet } = await supabase
         .from('wallets')
         .select('token_balance')
-        .eq('user_id', userId)
+        .eq('user_id', authUser.id)
         .single();
-      
+
       return {
         ...data,
         token_balance: wallet?.token_balance || 0
@@ -36,21 +79,19 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        const profile = await loadUserProfile(session.user.id);
+        const profile = await loadUserProfile(session.user);
         setUser(profile);
       }
       setLoading(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       if (session?.user) {
-        const profile = await loadUserProfile(session.user.id);
+        const profile = await loadUserProfile(session.user);
         setUser(profile);
       } else {
         setUser(null);
@@ -66,16 +107,15 @@ export function AuthProvider({ children }) {
       email,
       password
     });
-    
+
     if (error) throw error;
-    
-    const profile = await loadUserProfile(data.user.id);
+
+    const profile = await loadUserProfile(data.user);
     setUser(profile);
     return profile;
   };
 
   const register = async (email, password, fullName) => {
-    // Sign up with Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -83,33 +123,14 @@ export function AuthProvider({ children }) {
         data: { full_name: fullName }
       }
     });
-    
+
     if (error) throw error;
-    
-    // Create user profile
-    const { error: profileError } = await supabase
-      .from('users')
-      .insert({
-        id: data.user.id,
-        email,
-        full_name: fullName,
-        role: 'user',
-        suspended: false
-      });
-    
-    if (profileError && !profileError.message.includes('duplicate')) {
-      console.error('Profile creation error:', profileError);
-    }
-    
-    // Create wallet
-    await supabase
-      .from('wallets')
-      .insert({
-        user_id: data.user.id,
-        token_balance: 0
-      });
-    
-    const profile = await loadUserProfile(data.user.id);
+
+    // Wait briefly for the trigger to create the profile
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Load profile (trigger should have created it, loadUserProfile handles fallback)
+    const profile = await loadUserProfile(data.user);
     setUser(profile);
     return profile;
   };
@@ -122,7 +143,7 @@ export function AuthProvider({ children }) {
 
   const refreshUser = async () => {
     if (session?.user) {
-      const profile = await loadUserProfile(session.user.id);
+      const profile = await loadUserProfile(session.user);
       setUser(profile);
     }
   };
