@@ -5,7 +5,7 @@ from datetime import datetime
 import uuid
 
 class LAUTECHRentalsAPITester:
-    def __init__(self, base_url="https://ogbomoso-rentals.preview.emergentagent.com"):
+    def __init__(self, base_url="https://agent-verify-hub.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.user_id = None
