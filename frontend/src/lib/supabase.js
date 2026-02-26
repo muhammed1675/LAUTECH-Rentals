@@ -9,8 +9,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Singleton — ensures only ONE Supabase client exists across the entire app.
-// Multiple instances cause the "Lock broken by another request" AbortError.
 let supabaseInstance = null;
 
 function getSupabaseClient() {
