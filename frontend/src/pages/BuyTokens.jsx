@@ -27,11 +27,12 @@ export function BuyTokens() {
     }
     fetchWallet();
     setEmail(user?.email || '');
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   const fetchWallet = async () => {
+    if (!user) return;
     try {
-      const response = await walletAPI.get();
+      const response = await walletAPI.get(user.id);
       setWallet(response.data);
     } catch (error) {
       console.error('Failed to fetch wallet:', error);
@@ -50,7 +51,7 @@ export function BuyTokens() {
         quantity,
         email,
         phone_number: phone,
-      });
+      }, user.id);
       
       setPendingReference(response.data.reference);
       toast.success('Redirecting to payment...');
@@ -60,7 +61,7 @@ export function BuyTokens() {
         window.open(response.data.checkout_url, '_blank');
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to initiate purchase');
+      toast.error(error.message || 'Failed to initiate purchase');
     } finally {
       setLoading(false);
     }
@@ -124,7 +125,7 @@ export function BuyTokens() {
         <Card className="p-6 mb-6 text-center bg-primary/5">
           <p className="text-sm text-muted-foreground">Current Balance</p>
           <p className="text-4xl font-bold text-primary mt-1">
-            {wallet?.token_balance || 0} <span className="text-lg">tokens</span>
+            {user?.token_balance || wallet?.token_balance || 0} <span className="text-lg">tokens</span>
           </p>
         </Card>
 
