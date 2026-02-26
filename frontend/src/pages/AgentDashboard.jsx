@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { propertyAPI, inspectionAPI } from '../lib/api';
-import { storageAPI } from '../lib/api';
+import { propertyAPI, inspectionAPI, storageAPI } from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -11,10 +10,95 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
-import { Building2, Plus, Calendar, Edit, Clock, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
+import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { toast } from 'sonner';
 
+// ── Lightbox Component ──────────────────────────────────────────
+function Lightbox({ images, startIndex, onClose }) {
+  const [current, setCurrent] = useState(startIndex);
+
+  const prev = () => setCurrent(i => (i - 1 + images.length) % images.length);
+  const next = () => setCurrent(i => (i + 1) % images.length);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'ArrowLeft') prev();
+      if (e.key === 'ArrowRight') next();
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+      onClick={onClose}
+    >
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors z-10"
+      >
+        <X className="w-5 h-5" />
+      </button>
+
+      {/* Image counter */}
+      {images.length > 1 && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/70 text-sm bg-black/40 px-3 py-1 rounded-full">
+          {current + 1} / {images.length}
+        </div>
+      )}
+
+      {/* Prev button */}
+      {images.length > 1 && (
+        <button
+          onClick={(e) => { e.stopPropagation(); prev(); }}
+          className="absolute left-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
+        >
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Image */}
+      <img
+        src={images[current]}
+        alt={`Property image ${current + 1}`}
+        className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+
+      {/* Next button */}
+      {images.length > 1 && (
+        <button
+          onClick={(e) => { e.stopPropagation(); next(); }}
+          className="absolute right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
+        >
+          <ChevronRight className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Thumbnail strip */}
+      {images.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          {images.map((img, i) => (
+            <button
+              key={i}
+              onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
+              className={`w-12 h-12 rounded-md overflow-hidden border-2 transition-all ${i === current ? 'border-white scale-110' : 'border-white/30 opacity-60 hover:opacity-100'}`}
+            >
+              <img src={img} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────────
 export function AgentDashboard() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isAgent, isAdmin } = useAuth();
@@ -26,6 +110,9 @@ export function AgentDashboard() {
   const [showPropertyDialog, setShowPropertyDialog] = useState(false);
   const [editingProperty, setEditingProperty] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Lightbox state
+  const [lightbox, setLightbox] = useState({ open: false, images: [], index: 0 });
 
   const [formData, setFormData] = useState({
     title: '', description: '', price: '', location: '',
@@ -55,35 +142,23 @@ export function AgentDashboard() {
     }
   };
 
+  const openLightbox = (images, index = 0) => setLightbox({ open: true, images, index });
+  const closeLightbox = () => setLightbox({ open: false, images: [], index: 0 });
+
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
-
-    // Max 5 images total
-    if (formData.images.length + files.length > 5) {
-      toast.error('Maximum 5 images allowed');
-      return;
-    }
+    if (formData.images.length + files.length > 5) { toast.error('Maximum 5 images allowed'); return; }
 
     setUploadingImage(true);
     try {
       const uploadedUrls = [];
       for (const file of files) {
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-          toast.error(`${file.name} is not an image`);
-          continue;
-        }
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          toast.error(`${file.name} is too large. Max 5MB`);
-          continue;
-        }
-
+        if (!file.type.startsWith('image/')) { toast.error(`${file.name} is not an image`); continue; }
+        if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name} is too large. Max 5MB`); continue; }
         const result = await storageAPI.uploadImage(file, 'property-images');
         uploadedUrls.push(result.data.url);
       }
-
       if (uploadedUrls.length > 0) {
         setFormData(prev => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
         toast.success(`${uploadedUrls.length} image${uploadedUrls.length > 1 ? 's' : ''} uploaded`);
@@ -93,7 +168,6 @@ export function AgentDashboard() {
       console.error('Upload error:', error);
     } finally {
       setUploadingImage(false);
-      // Reset file input so same file can be selected again
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -124,10 +198,7 @@ export function AgentDashboard() {
       toast.error('Please fill in all required fields'); return;
     }
     try {
-      const data = {
-        ...formData, price: parseInt(formData.price),
-        images: formData.images.length > 0 ? formData.images : [],
-      };
+      const data = { ...formData, price: parseInt(formData.price), images: formData.images };
       if (editingProperty) {
         await propertyAPI.update(editingProperty.id, data);
         toast.success('Property updated');
@@ -160,6 +231,9 @@ export function AgentDashboard() {
 
   return (
     <div className="container mx-auto px-4 py-6" data-testid="agent-dashboard">
+      {/* Lightbox */}
+      {lightbox.open && <Lightbox images={lightbox.images} startIndex={lightbox.index} onClose={closeLightbox} />}
+
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Agent Dashboard</h1>
@@ -184,37 +258,65 @@ export function AgentDashboard() {
         </TabsList>
 
         <TabsContent value="properties">
-          {loading ? <div className="space-y-4">{[1,2,3].map(i => <Card key={i} className="p-4 animate-pulse"><div className="h-24 bg-muted rounded" /></Card>)}</div>
-          : properties.length > 0 ? (
-            <div className="space-y-4">
-              {properties.map((property) => (
-                <Card key={property.id} className="p-4">
-                  <div className="flex gap-4">
-                    {property.images?.[0] ? (
-                      <img src={property.images[0]} alt="" className="w-32 h-24 rounded-lg object-cover" />
-                    ) : (
-                      <div className="w-32 h-24 rounded-lg bg-muted flex items-center justify-center">
-                        <Image className="w-8 h-8 text-muted-foreground" />
+          {loading
+            ? <div className="space-y-4">{[1,2,3].map(i => <Card key={i} className="p-4 animate-pulse"><div className="h-24 bg-muted rounded" /></Card>)}</div>
+            : properties.length > 0 ? (
+              <div className="space-y-4">
+                {properties.map((property) => (
+                  <Card key={property.id} className="p-4">
+                    <div className="flex gap-4">
+                      {/* Property thumbnail with view button */}
+                      <div className="relative group w-32 h-24 flex-shrink-0">
+                        {property.images?.[0] ? (
+                          <>
+                            <img
+                              src={property.images[0]}
+                              alt=""
+                              className="w-full h-full rounded-lg object-cover cursor-pointer"
+                              onClick={() => openLightbox(property.images, 0)}
+                            />
+                            <button
+                              onClick={() => openLightbox(property.images, 0)}
+                              className="absolute bottom-1 right-1 bg-black/60 hover:bg-black/80 text-white text-xs px-2 py-0.5 rounded-md flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Expand className="w-3 h-3" />
+                              View
+                            </button>
+                            {property.images.length > 1 && (
+                              <span className="absolute top-1 right-1 bg-black/60 text-white text-xs px-1.5 rounded-md">
+                                +{property.images.length - 1}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
+                            <Image className="w-8 h-8 text-muted-foreground" />
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between">
-                        <div><h3 className="font-semibold">{property.title}</h3><p className="text-sm text-muted-foreground">{property.location}</p><p className="text-primary font-bold mt-1">{formatPrice(property.price)}/year</p></div>
-                        <Badge className={getStatusBadge(property.status)}>{property.status}</Badge>
+
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold">{property.title}</h3>
+                            <p className="text-sm text-muted-foreground">{property.location}</p>
+                            <p className="text-primary font-bold mt-1">{formatPrice(property.price)}/year</p>
+                          </div>
+                          <Badge className={getStatusBadge(property.status)}>{property.status}</Badge>
+                        </div>
                       </div>
+                      <Button variant="outline" size="sm" onClick={() => handleOpenDialog(property)}><Edit className="w-4 h-4" /></Button>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => handleOpenDialog(property)}><Edit className="w-4 h-4" /></Button>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card className="p-8 text-center">
-              <Building2 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold">No Properties Yet</h3>
-              <Button onClick={() => handleOpenDialog()} className="mt-4">Add Property</Button>
-            </Card>
-          )}
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card className="p-8 text-center">
+                <Building2 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-semibold">No Properties Yet</h3>
+                <Button onClick={() => handleOpenDialog()} className="mt-4">Add Property</Button>
+              </Card>
+            )}
         </TabsContent>
 
         <TabsContent value="inspections">
@@ -241,7 +343,10 @@ export function AgentDashboard() {
               ))}
             </div>
           ) : (
-            <Card className="p-8 text-center"><Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" /><h3 className="font-semibold">No Inspections Assigned</h3></Card>
+            <Card className="p-8 text-center">
+              <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="font-semibold">No Inspections Assigned</h3>
+            </Card>
           )}
         </TabsContent>
       </Tabs>
@@ -249,14 +354,20 @@ export function AgentDashboard() {
       {/* Property Dialog */}
       <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingProperty ? 'Edit Property' : 'Add New Property'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editingProperty ? 'Edit Property' : 'Add New Property'}</DialogTitle>
+            <DialogDescription>Fill in the details below to {editingProperty ? 'update your' : 'list a new'} property.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Title *</Label><Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Cozy Student Hostel" /></div>
               <div className="space-y-2"><Label>Property Type *</Label>
                 <Select value={formData.property_type} onValueChange={(value) => setFormData({ ...formData, property_type: value })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="hostel"><Home className="w-4 h-4 inline mr-2" />Hostel</SelectItem><SelectItem value="apartment"><Building className="w-4 h-4 inline mr-2" />Apartment</SelectItem></SelectContent>
+                  <SelectContent>
+                    <SelectItem value="hostel"><Home className="w-4 h-4 inline mr-2" />Hostel</SelectItem>
+                    <SelectItem value="apartment"><Building className="w-4 h-4 inline mr-2" />Apartment</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
             </div>
@@ -270,24 +381,15 @@ export function AgentDashboard() {
               <div className="space-y-2"><Label>Owner Phone *</Label><Input value={formData.contact_phone} onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })} placeholder="+234..." /></div>
             </div>
 
-            {/* Image Upload Section */}
+            {/* Image Upload */}
             <div className="space-y-3">
               <Label>Property Images <span className="text-muted-foreground text-xs">(max 5, up to 5MB each)</span></Label>
-
-              {/* Upload button */}
               <div
                 onClick={() => !uploadingImage && fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
                   ${uploadingImage ? 'opacity-50 cursor-not-allowed border-muted' : 'border-muted-foreground/25 hover:border-primary hover:bg-muted/30'}`}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
                 {uploadingImage ? (
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -302,24 +404,41 @@ export function AgentDashboard() {
                 )}
               </div>
 
-              {/* Image previews */}
+              {/* Image grid with view button */}
               {formData.images.length > 0 && (
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                   {formData.images.map((img, index) => (
                     <div key={index} className="relative group aspect-square">
-                      <img src={img} alt={`Property ${index + 1}`} className="w-full h-full rounded-lg object-cover" />
+                      <img
+                        src={img}
+                        alt={`Property ${index + 1}`}
+                        className="w-full h-full rounded-lg object-cover cursor-pointer"
+                        onClick={() => openLightbox(formData.images, index)}
+                      />
+                      {/* View button — bottom right */}
+                      <button
+                        type="button"
+                        onClick={() => openLightbox(formData.images, index)}
+                        className="absolute bottom-1 right-1 bg-black/60 hover:bg-black/80 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Expand className="w-3 h-3" />
+                        View
+                      </button>
+                      {/* Remove button — top right */}
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(index)}
-                        className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                        className="absolute top-1 right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
                       >
-                        <XCircle className="w-4 h-4" />
+                        <XCircle className="w-3.5 h-3.5" />
                       </button>
+                      {/* Cover badge */}
                       {index === 0 && (
-                        <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1 rounded">Cover</span>
+                        <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1 rounded pointer-events-none">Cover</span>
                       )}
                     </div>
                   ))}
+                  {/* Add more slot */}
                   {formData.images.length < 5 && (
                     <div
                       onClick={() => fileInputRef.current?.click()}
@@ -335,7 +454,9 @@ export function AgentDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowPropertyDialog(false); resetForm(); }}>Cancel</Button>
             <Button onClick={handleSubmitProperty} disabled={uploadingImage}>
-              {uploadingImage ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</> : <>{editingProperty ? 'Update' : 'Create'} Property</>}
+              {uploadingImage
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading...</>
+                : <>{editingProperty ? 'Update' : 'Create'} Property</>}
             </Button>
           </DialogFooter>
         </DialogContent>
