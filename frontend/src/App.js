@@ -5,6 +5,7 @@ import { Toaster } from "./components/ui/sonner";
 import Layout from "./components/Layout";
 
 // Pages
+import ResetPassword from "./pages/ResetPassword";
 import Home from "./pages/Home";
 import Browse from "./pages/Browse";
 import PropertyDetails from "./pages/PropertyDetails";
