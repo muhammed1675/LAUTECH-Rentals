@@ -6,157 +6,107 @@ A production-ready rental listing platform for students at Ladoke Akintola Unive
 **Target Market:** Students looking for verified hostels and apartments in LAUTECH area.
 
 ## Architecture
-- **Frontend:** React with Shadcn/UI components
-- **Backend:** FastAPI + Supabase (PostgreSQL)
-- **Auth:** Supabase Auth
-- **Storage:** Supabase Storage (for images)
+- **Frontend:** React (CRA + Craco) with Shadcn/UI components
+- **Backend-as-a-Service:** Supabase (Auth, Database, Storage)
 - **Payments:** KoralPay integration
+- **Deployment:** Vercel (frontend-only, no separate backend)
 
 ## User Personas
 
 ### 1. Students (Users)
-- Age: 18-30 years
-- Tech-savvy, mobile-first
-- Budget-conscious
+- Age: 18-30 years, tech-savvy, mobile-first, budget-conscious
 - Need verified, affordable accommodation
 
 ### 2. Property Agents
 - Verified individuals who list properties
-- Manage property listings and inspections
-- Earn through property visibility
+- Manage listings and inspections
 
 ### 3. Platform Admins
-- Manage user roles and permissions
-- Approve/reject properties and agent verifications
-- Monitor platform revenue and operations
+- Manage user roles, approve properties and agents
+- Monitor platform revenue
 
-## Core Requirements (Static)
+## Core Requirements
 
 ### Authentication & Roles
-- User registration with default "user" role
-- JWT-based authentication
-- Role-based access control (user, agent, admin)
-- Manual role assignment by admin via database
+- Supabase Auth (email/password)
+- Role-based access: user, agent, admin
+- Auto-profile creation on signup via trigger
 
 ### Agent Verification Flow
 1. User submits ID card, selfie, and address
 2. Admin reviews documents
-3. Admin approves → user becomes agent
+3. Approved → user becomes agent
 
 ### Property Management
 - CRUD operations for properties
-- Property approval workflow
+- Approval workflow (pending → approved/rejected)
 - Types: hostel, apartment
-- Fields: title, description, price, location, images, owner contact
 
 ### Token System
-- ₦1,000 = 1 token via KoralPay
+- 1,000 NGN = 1 token via KoralPay
 - Tokens used to unlock owner contacts
-- Wallet balance tracked per user
 
 ### Inspection System
-- ₦2,000 fixed fee via KoralPay
+- 2,000 NGN fixed fee via KoralPay
 - Auto-assigned to property's agent
-- Status tracking: pending → assigned → completed
 
-## What's Been Implemented ✅
+## What's Been Implemented
 
-### Phase 1 - MVP (Feb 26, 2026)
-- [x] Complete backend API with 30+ endpoints
-- [x] User registration and authentication
-- [x] Role-based access control
-- [x] Agent verification request system
-- [x] Property CRUD with approval workflow
-- [x] Token purchase flow with KoralPay placeholder
-- [x] Property contact unlock system
-- [x] Inspection request system
-- [x] Modern responsive UI (blue/green theme)
-- [x] Home page with hero section
-- [x] Browse properties with filters
-- [x] Property details with image gallery
-- [x] User profile with tabs (unlocks, inspections, transactions)
-- [x] Buy tokens page
-- [x] Agent dashboard
-- [x] Admin dashboard with full management capabilities
-- [x] Mobile-first design with bottom navigation
-- [x] Payment simulation endpoint for testing
+### Phase 1 - Frontend MVP (Feb 26, 2026)
+- [x] Complete frontend UI with all pages
+- [x] Supabase client integration (auth, database queries)
+- [x] Supabase API helper functions in src/lib/api.js
+- [x] Home page with hero section and CTA
+- [x] Browse properties with filters (type, price range, search)
+- [x] Property details with image gallery, contact unlock, inspection request
+- [x] User profile with tabs (unlocks, inspections, transactions, settings)
+- [x] Buy tokens page with quantity selector and KoralPay checkout
+- [x] Agent dashboard (property CRUD, assigned inspections)
+- [x] Admin dashboard (stats, users, verifications, properties, inspections, transactions)
+- [x] Become Agent verification form
+- [x] Payment callback verification page
+- [x] Modern responsive UI (blue/green theme, mobile-first)
+- [x] Desktop and mobile navigation with role-based menus
+- [x] Payment simulation for testing
 
-### Database Collections
-- users
-- wallets
-- agent_verification_requests
-- properties
-- transactions
-- unlocks
-- inspections
-- inspection_transactions
+### Vercel Deployment Readiness (Feb 26, 2026)
+- [x] Build succeeds (yarn build)
+- [x] .nvmrc pinned to Node 20
+- [x] vercel.json with SPA rewrite rules
+- [x] engines field in package.json
+- [x] .npmrc with legacy-peer-deps=true
+- [x] Removed unused axios dependency
+- [x] Fixed all error handling patterns (removed Axios patterns)
+- [x] Fixed BecomeAgent user argument bug
 
 ## Prioritized Backlog
 
 ### P0 - Critical (For Production)
-- [ ] Configure actual KoralPay API keys
-- [ ] Set up Supabase for production database
-- [ ] Configure webhook endpoints for payment verification
-- [ ] Add image upload to Supabase Storage
+- [ ] Configure real Supabase project credentials
+- [ ] Configure real KoralPay API keys
+- [ ] Run Supabase SQL schema (supabase_schema.sql)
+- [ ] Enable auth trigger for auto user profile creation
+- [ ] Test full auth flow with real Supabase
 
 ### P1 - High Priority
-- [ ] Email notifications for key actions
-- [ ] Password reset functionality
-- [ ] Rate limiting on API endpoints
-- [ ] Search by location autocomplete
+- [ ] Supabase Storage for file uploads (agent verification docs, property images)
+- [ ] KoralPay webhook via Supabase Edge Functions
+- [ ] Row Level Security (RLS) policies (schema has them defined)
+- [ ] Email notifications
+- [ ] Password reset
 
 ### P2 - Nice to Have
-- [ ] Property map view integration
+- [ ] Property map view
 - [ ] Push notifications
 - [ ] Review/rating system for agents
 - [ ] Dark mode toggle
-- [ ] Export transaction reports to CSV
+- [ ] Export reports to CSV
 
-## Test Accounts (Development)
+## Database Schema
+Defined in /app/supabase_schema.sql with tables:
+users, wallets, agent_verification_requests, properties, transactions, unlocks, inspections, inspection_transactions
 
-| Role | Email | Password |
-|------|-------|----------|
-| User | test@example.com | test123 |
-| Agent | agent@example.com | agent123 |
-| Admin | admin@example.com | admin123 |
-
-## API Endpoints Summary
-
-### Auth
-- POST /api/auth/register
-- POST /api/auth/login
-- GET /api/auth/me
-
-### Properties
-- GET /api/properties (public, approved only)
-- GET /api/properties/{id} (authenticated)
-- POST /api/properties (agent/admin)
-- PUT /api/properties/{id}
-- DELETE /api/properties/{id} (admin)
-- POST /api/properties/{id}/approve (admin)
-- POST /api/properties/{id}/unlock
-
-### Tokens & Wallet
-- GET /api/wallet
-- POST /api/tokens/purchase
-
-### Inspections
-- POST /api/inspections
-- GET /api/inspections
-- GET /api/inspections/assigned
-- PUT /api/inspections/{id}
-
-### Admin
-- GET /api/admin/stats
-- GET /api/users
-- PUT /api/users/{id}/role
-- PUT /api/users/{id}/suspend
-- GET /api/agent-verification/pending
-- POST /api/agent-verification/{id}/review
-
-## Next Steps
-1. Obtain KoralPay production API keys
-2. Set up Supabase project and migrate database
-3. Configure webhooks for payment verification
-4. Deploy to Vercel
-5. Set up monitoring and error tracking
+## Environment Variables (for Vercel)
+- REACT_APP_SUPABASE_URL
+- REACT_APP_SUPABASE_ANON_KEY
+- REACT_APP_KORALPAY_PUBLIC_KEY
