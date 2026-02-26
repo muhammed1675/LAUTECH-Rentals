@@ -34,7 +34,7 @@ export function BecomeAgent() {
         id_card_url: idCardUrl,
         selfie_url: selfieUrl,
         address,
-      });
+      }, user);
       toast.success('Verification request submitted!');
       setSubmitted(true);
     } catch (error) {
