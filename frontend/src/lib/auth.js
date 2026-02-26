@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabase';
 
 const AuthContext = createContext(null);
@@ -7,9 +7,13 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Prevents concurrent profile loads (React Strict Mode / race conditions)
+  const profileLoadingRef = useRef(false);
 
   const loadUserProfile = useCallback(async (authUser) => {
     if (!authUser?.id) return null;
+    if (profileLoadingRef.current) return null;
+    profileLoadingRef.current = true;
 
     try {
       const { data, error } = await supabase
@@ -19,7 +23,6 @@ export function AuthProvider({ children }) {
         .single();
 
       if (error && error.code === 'PGRST116') {
-        // No profile row — try creating one
         const { data: created, error: insertErr } = await supabase
           .from('users')
           .insert({
@@ -33,7 +36,6 @@ export function AuthProvider({ children }) {
           .single();
 
         if (insertErr) {
-          // Trigger may have created it — retry read
           const { data: retry } = await supabase
             .from('users')
             .select('*')
@@ -52,6 +54,10 @@ export function AuthProvider({ children }) {
       }
 
       if (error) {
+        // Silently ignore AbortErrors from React Strict Mode double-mounts
+        if (error.name === 'AbortError' || error.message?.includes('AbortError') || error.message?.includes('Lock broken')) {
+          return null;
+        }
         console.error('Profile load error:', error.message);
         return null;
       }
@@ -64,46 +70,58 @@ export function AuthProvider({ children }) {
 
       return { ...data, token_balance: wallet?.token_balance || 0 };
     } catch (err) {
+      if (err.name === 'AbortError' || err.message?.includes('AbortError') || err.message?.includes('Lock broken')) {
+        return null;
+      }
       console.error('loadUserProfile exception:', err);
       return null;
+    } finally {
+      profileLoadingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (!mounted) return;
       setSession(s);
       if (s?.user) {
         const profile = await loadUserProfile(s.user);
-        setUser(profile);
+        if (mounted && profile) setUser(profile);
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
+      if (!mounted) return;
       setSession(s);
       if (s?.user) {
         const profile = await loadUserProfile(s.user);
-        setUser(profile);
+        if (mounted && profile) setUser(profile);
       } else {
-        setUser(null);
+        if (mounted) setUser(null);
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [loadUserProfile]);
 
   const login = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      // Give a friendlier message for unconfirmed emails
       if (error.message?.toLowerCase().includes('email not confirmed')) {
         throw new Error('Please confirm your email first. Check your inbox for a confirmation link.');
       }
       throw error;
     }
 
+    await new Promise(r => setTimeout(r, 500));
     const profile = await loadUserProfile(data.user);
     if (!profile) {
       throw new Error('Could not load your profile. Please contact support.');
@@ -121,13 +139,10 @@ export function AuthProvider({ children }) {
 
     if (error) throw error;
 
-    // If email confirmation is required, data.session will be null
-    // We return a special flag so the UI can show a "check your email" message
     if (!data.session) {
       return { requiresConfirmation: true };
     }
 
-    // Email confirmation is disabled — user is logged in immediately
     await new Promise(r => setTimeout(r, 1500));
     const profile = await loadUserProfile(data.user);
     setUser(profile);
@@ -143,7 +158,7 @@ export function AuthProvider({ children }) {
   const refreshUser = async () => {
     if (session?.user) {
       const profile = await loadUserProfile(session.user);
-      setUser(profile);
+      if (profile) setUser(profile);
     }
   };
 
