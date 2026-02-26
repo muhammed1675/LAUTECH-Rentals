@@ -7,9 +7,10 @@ A production-ready rental listing platform for students at Ladoke Akintola Unive
 
 ## Architecture
 - **Frontend:** React with Shadcn/UI components
-- **Backend:** FastAPI + MongoDB
-- **Payments:** KoralPay integration (placeholder credentials)
-- **Auth:** JWT-based authentication
+- **Backend:** FastAPI + Supabase (PostgreSQL)
+- **Auth:** Supabase Auth
+- **Storage:** Supabase Storage (for images)
+- **Payments:** KoralPay integration
 
 ## User Personas
 
