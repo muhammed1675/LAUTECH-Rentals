@@ -1,11 +1,12 @@
+-- =============================================
 -- LAUTECH Rentals - Supabase Database Schema
--- Run this in Supabase SQL Editor
+-- Run this ENTIRE file in Supabase SQL Editor
+-- =============================================
 
 -- ============================================
 -- TABLES
 -- ============================================
 
--- Users table (extends Supabase Auth)
 CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
@@ -15,7 +16,6 @@ CREATE TABLE IF NOT EXISTS public.users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Wallets table
 CREATE TABLE IF NOT EXISTS public.wallets (
     id SERIAL PRIMARY KEY,
     user_id UUID UNIQUE NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS public.wallets (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Agent verification requests
 CREATE TABLE IF NOT EXISTS public.agent_verification_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -38,7 +37,6 @@ CREATE TABLE IF NOT EXISTS public.agent_verification_requests (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Properties table
 CREATE TABLE IF NOT EXISTS public.properties (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
@@ -56,7 +54,6 @@ CREATE TABLE IF NOT EXISTS public.properties (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Token transactions
 CREATE TABLE IF NOT EXISTS public.transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -68,7 +65,6 @@ CREATE TABLE IF NOT EXISTS public.transactions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Unlocks table
 CREATE TABLE IF NOT EXISTS public.unlocks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -77,7 +73,6 @@ CREATE TABLE IF NOT EXISTS public.unlocks (
     UNIQUE(user_id, property_id)
 );
 
--- Inspections table
 CREATE TABLE IF NOT EXISTS public.inspections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -94,7 +89,6 @@ CREATE TABLE IF NOT EXISTS public.inspections (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Inspection transactions
 CREATE TABLE IF NOT EXISTS public.inspection_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     inspection_id UUID NOT NULL REFERENCES public.inspections(id) ON DELETE CASCADE,
@@ -126,10 +120,40 @@ CREATE INDEX IF NOT EXISTS idx_inspections_agent ON public.inspections(agent_id)
 CREATE INDEX IF NOT EXISTS idx_inspections_status ON public.inspections(status);
 
 -- ============================================
+-- AUTO-CREATE PROFILE TRIGGER (CRITICAL)
+-- This automatically creates a public.users row
+-- and wallet when someone signs up via Supabase Auth
+-- ============================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.users (id, email, full_name, role, suspended)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+        'user',
+        false
+    );
+
+    INSERT INTO public.wallets (user_id, token_balance)
+    VALUES (NEW.id, 0);
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop trigger if it exists, then create it
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ============================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================
 
--- Enable RLS on all tables
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wallets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agent_verification_requests ENABLE ROW LEVEL SECURITY;
@@ -143,25 +167,36 @@ ALTER TABLE public.inspection_transactions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own profile" ON public.users
     FOR SELECT USING (auth.uid() = id);
 
+CREATE POLICY "Users can update own profile" ON public.users
+    FOR UPDATE USING (auth.uid() = id);
+
+CREATE POLICY "Users can insert own profile" ON public.users
+    FOR INSERT WITH CHECK (auth.uid() = id);
+
 CREATE POLICY "Admins can view all users" ON public.users
     FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
     );
 
-CREATE POLICY "Service role can manage users" ON public.users
-    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Admins can update all users" ON public.users
+    FOR UPDATE USING (
+        EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+    );
 
 -- Wallets policies
 CREATE POLICY "Users can view own wallet" ON public.wallets
     FOR SELECT USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can insert own wallet" ON public.wallets
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own wallet" ON public.wallets
+    FOR UPDATE USING (auth.uid() = user_id);
+
 CREATE POLICY "Admins can view all wallets" ON public.wallets
     FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
     );
-
-CREATE POLICY "Service role can manage wallets" ON public.wallets
-    FOR ALL USING (auth.role() = 'service_role');
 
 -- Properties policies
 CREATE POLICY "Anyone can view approved properties" ON public.properties
@@ -180,91 +215,102 @@ CREATE POLICY "Agents can create properties" ON public.properties
         EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('agent', 'admin'))
     );
 
-CREATE POLICY "Service role can manage properties" ON public.properties
-    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Agents can update own properties" ON public.properties
+    FOR UPDATE USING (auth.uid() = uploaded_by_agent_id);
+
+CREATE POLICY "Admins can update all properties" ON public.properties
+    FOR UPDATE USING (
+        EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+    );
 
 -- Transactions policies
 CREATE POLICY "Users can view own transactions" ON public.transactions
     FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create own transactions" ON public.transactions
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Admins can view all transactions" ON public.transactions
     FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
     );
 
-CREATE POLICY "Service role can manage transactions" ON public.transactions
-    FOR ALL USING (auth.role() = 'service_role');
-
 -- Unlocks policies
 CREATE POLICY "Users can view own unlocks" ON public.unlocks
     FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Service role can manage unlocks" ON public.unlocks
-    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Users can create own unlocks" ON public.unlocks
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Inspections policies
 CREATE POLICY "Users can view own inspections" ON public.inspections
     FOR SELECT USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can create own inspections" ON public.inspections
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Agents can view assigned inspections" ON public.inspections
     FOR SELECT USING (auth.uid() = agent_id);
+
+CREATE POLICY "Agents can update assigned inspections" ON public.inspections
+    FOR UPDATE USING (auth.uid() = agent_id);
 
 CREATE POLICY "Admins can view all inspections" ON public.inspections
     FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
     );
 
-CREATE POLICY "Service role can manage inspections" ON public.inspections
-    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Admins can update all inspections" ON public.inspections
+    FOR UPDATE USING (
+        EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+    );
+
+-- Inspection transactions policies
+CREATE POLICY "Users can view own inspection transactions" ON public.inspection_transactions
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create own inspection transactions" ON public.inspection_transactions
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Agent verification policies
 CREATE POLICY "Users can view own verification requests" ON public.agent_verification_requests
     FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create verification requests" ON public.agent_verification_requests
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Admins can view all verification requests" ON public.agent_verification_requests
     FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
     );
 
-CREATE POLICY "Service role can manage verification requests" ON public.agent_verification_requests
-    FOR ALL USING (auth.role() = 'service_role');
-
--- ============================================
--- STORAGE BUCKETS
--- ============================================
-
--- Create storage buckets (run in Supabase Dashboard or via API)
--- INSERT INTO storage.buckets (id, name, public) VALUES ('property-images', 'property-images', true);
--- INSERT INTO storage.buckets (id, name, public) VALUES ('verification-docs', 'verification-docs', false);
-
--- ============================================
--- FUNCTIONS (Optional - for triggers)
--- ============================================
-
--- Function to create user profile after signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO public.users (id, email, full_name, role, suspended)
-    VALUES (
-        NEW.id,
-        NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-        'user',
-        false
+CREATE POLICY "Admins can update verification requests" ON public.agent_verification_requests
+    FOR UPDATE USING (
+        EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
     );
-    
-    INSERT INTO public.wallets (user_id, token_balance)
-    VALUES (NEW.id, 0);
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger for new user signup (optional - backend handles this)
--- CREATE TRIGGER on_auth_user_created
---     AFTER INSERT ON auth.users
---     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+-- ============================================
+-- FIX EXISTING USERS (run after enabling trigger)
+-- Creates profiles for users who signed up
+-- before the trigger was enabled
+-- ============================================
+
+INSERT INTO public.users (id, email, full_name, role, suspended)
+SELECT
+    au.id,
+    au.email,
+    COALESCE(au.raw_user_meta_data->>'full_name', split_part(au.email, '@', 1)),
+    'user',
+    false
+FROM auth.users au
+WHERE NOT EXISTS (SELECT 1 FROM public.users pu WHERE pu.id = au.id);
+
+INSERT INTO public.wallets (user_id, token_balance)
+SELECT
+    au.id,
+    0
+FROM auth.users au
+WHERE NOT EXISTS (SELECT 1 FROM public.wallets w WHERE w.user_id = au.id);
 
 -- ============================================
 -- INITIAL ADMIN SETUP
