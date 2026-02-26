@@ -95,11 +95,18 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+
+    if (error) {
+      // Give a friendlier message for unconfirmed emails
+      if (error.message?.toLowerCase().includes('email not confirmed')) {
+        throw new Error('Please confirm your email first. Check your inbox for a confirmation link.');
+      }
+      throw error;
+    }
 
     const profile = await loadUserProfile(data.user);
     if (!profile) {
-      throw new Error('Could not load your profile. Please run the database setup SQL in Supabase.');
+      throw new Error('Could not load your profile. Please contact support.');
     }
     setUser(profile);
     return profile;
@@ -111,11 +118,17 @@ export function AuthProvider({ children }) {
       password,
       options: { data: { full_name: fullName } }
     });
+
     if (error) throw error;
 
-    // Wait for trigger to create profile
-    await new Promise(r => setTimeout(r, 1500));
+    // If email confirmation is required, data.session will be null
+    // We return a special flag so the UI can show a "check your email" message
+    if (!data.session) {
+      return { requiresConfirmation: true };
+    }
 
+    // Email confirmation is disabled — user is logged in immediately
+    await new Promise(r => setTimeout(r, 1500));
     const profile = await loadUserProfile(data.user);
     setUser(profile);
     return profile;
