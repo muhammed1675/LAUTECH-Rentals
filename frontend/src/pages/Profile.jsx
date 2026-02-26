@@ -15,9 +15,6 @@ import {
   Shield,
   Building2,
   Plus,
-  Clock,
-  CheckCircle2,
-  XCircle,
   ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,16 +36,17 @@ export function Profile() {
       return;
     }
     fetchData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   const fetchData = async () => {
+    if (!user) return;
     setLoading(true);
     try {
       const [walletRes, unlocksRes, inspectionsRes, txRes] = await Promise.all([
-        walletAPI.get(),
-        unlockAPI.getMyUnlocks(),
-        inspectionAPI.getMyInspections(),
-        transactionAPI.getMyTransactions(),
+        walletAPI.get(user.id),
+        unlockAPI.getMyUnlocks(user.id),
+        inspectionAPI.getMyInspections(user.id),
+        transactionAPI.getMyTransactions(user.id),
       ]);
       
       setWallet(walletRes.data);
@@ -59,7 +57,7 @@ export function Profile() {
       // Check verification request for users
       if (user?.role === 'user') {
         try {
-          const verRes = await verificationAPI.getMyRequest();
+          const verRes = await verificationAPI.getMyRequest(user.id);
           setVerificationRequest(verRes.data);
         } catch (e) {
           // No request yet
@@ -126,7 +124,7 @@ export function Profile() {
             <div>
               <p className="text-sm text-muted-foreground">Token Balance</p>
               <p className="text-4xl font-bold text-primary mt-1">
-                {wallet?.token_balance || 0}
+                {user?.token_balance || wallet?.token_balance || 0}
               </p>
             </div>
             <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
