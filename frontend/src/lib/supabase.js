@@ -3,6 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Supabase env vars missing!');
+}
+
 let instance = null;
 
 export const supabase = (() => {
@@ -11,7 +15,7 @@ export const supabase = (() => {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      detectSessionInUrl: false, // We handle the reset token manually in ResetPassword.jsx
     }
   });
   return instance;
