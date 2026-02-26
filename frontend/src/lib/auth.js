@@ -7,7 +7,6 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Prevents concurrent profile loads (React Strict Mode / race conditions)
   const profileLoadingRef = useRef(false);
 
   const loadUserProfile = useCallback(async (authUser) => {
@@ -54,7 +53,6 @@ export function AuthProvider({ children }) {
       }
 
       if (error) {
-        // Silently ignore AbortErrors from React Strict Mode double-mounts
         if (error.name === 'AbortError' || error.message?.includes('AbortError') || error.message?.includes('Lock broken')) {
           return null;
         }
