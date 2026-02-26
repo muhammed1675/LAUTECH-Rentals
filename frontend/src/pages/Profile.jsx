@@ -36,8 +36,7 @@ export function Profile() {
       return;
     }
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     if (!user) return;

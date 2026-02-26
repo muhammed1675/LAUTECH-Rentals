@@ -45,8 +45,7 @@ export function Browse() {
 
   useEffect(() => {
     fetchProperties();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleApplyFilters = () => {
     fetchProperties();

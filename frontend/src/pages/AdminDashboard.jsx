@@ -32,8 +32,7 @@ export function AdminDashboard() {
     if (!isAuthenticated) { navigate('/login'); return; }
     if (!isAdmin) { toast.error('Access denied'); navigate('/'); return; }
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     setLoading(true);
