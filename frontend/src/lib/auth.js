@@ -9,8 +9,9 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const loadUserProfile = useCallback(async (authUser) => {
+    if (!authUser?.id) return null;
+
     try {
-      // Try to load existing profile
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -18,9 +19,8 @@ export function AuthProvider({ children }) {
         .single();
 
       if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist yet (trigger may not have fired)
-        // Create it from auth user data
-        const { data: newProfile, error: insertError } = await supabase
+        // No profile row — try creating one
+        const { data: created, error: insertErr } = await supabase
           .from('users')
           .insert({
             id: authUser.id,
@@ -32,66 +32,57 @@ export function AuthProvider({ children }) {
           .select()
           .single();
 
-        if (insertError) {
-          console.error('Profile creation failed:', insertError);
-          // One more attempt to read (trigger might have created it between our read and write)
-          const { data: retryData } = await supabase
+        if (insertErr) {
+          // Trigger may have created it — retry read
+          const { data: retry } = await supabase
             .from('users')
             .select('*')
             .eq('id', authUser.id)
             .single();
-          if (retryData) {
-            const { data: wallet } = await supabase
-              .from('wallets')
-              .select('token_balance')
-              .eq('user_id', authUser.id)
-              .single();
-            return { ...retryData, token_balance: wallet?.token_balance || 0 };
+
+          if (retry) {
+            const { data: w } = await supabase.from('wallets').select('token_balance').eq('user_id', authUser.id).single();
+            return { ...retry, token_balance: w?.token_balance || 0 };
           }
           return null;
         }
 
-        // Also create wallet if profile was created
-        await supabase
-          .from('wallets')
-          .insert({ user_id: authUser.id, token_balance: 0 });
-
-        return { ...newProfile, token_balance: 0 };
+        await supabase.from('wallets').insert({ user_id: authUser.id, token_balance: 0 });
+        return { ...created, token_balance: 0 };
       }
 
-      if (error) throw error;
+      if (error) {
+        console.error('Profile load error:', error.message);
+        return null;
+      }
 
-      // Get wallet balance
       const { data: wallet } = await supabase
         .from('wallets')
         .select('token_balance')
         .eq('user_id', authUser.id)
         .single();
 
-      return {
-        ...data,
-        token_balance: wallet?.token_balance || 0
-      };
-    } catch (error) {
-      console.error('Failed to load user profile:', error);
+      return { ...data, token_balance: wallet?.token_balance || 0 };
+    } catch (err) {
+      console.error('loadUserProfile exception:', err);
       return null;
     }
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        const profile = await loadUserProfile(session.user);
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      setSession(s);
+      if (s?.user) {
+        const profile = await loadUserProfile(s.user);
         setUser(profile);
       }
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      if (session?.user) {
-        const profile = await loadUserProfile(session.user);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
+      setSession(s);
+      if (s?.user) {
+        const profile = await loadUserProfile(s.user);
         setUser(profile);
       } else {
         setUser(null);
@@ -103,14 +94,13 @@ export function AuthProvider({ children }) {
   }, [loadUserProfile]);
 
   const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
     const profile = await loadUserProfile(data.user);
+    if (!profile) {
+      throw new Error('Could not load your profile. Please run the database setup SQL in Supabase.');
+    }
     setUser(profile);
     return profile;
   };
@@ -119,17 +109,13 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { full_name: fullName }
-      }
+      options: { data: { full_name: fullName } }
     });
-
     if (error) throw error;
 
-    // Wait briefly for the trigger to create the profile
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Wait for trigger to create profile
+    await new Promise(r => setTimeout(r, 1500));
 
-    // Load profile (trigger should have created it, loadUserProfile handles fallback)
     const profile = await loadUserProfile(data.user);
     setUser(profile);
     return profile;
@@ -149,31 +135,20 @@ export function AuthProvider({ children }) {
   };
 
   const value = {
-    user,
-    session,
-    loading,
-    login,
-    register,
-    logout,
-    refreshUser,
+    user, session, loading,
+    login, register, logout, refreshUser,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     isAgent: user?.role === 'agent',
     isUser: user?.role === 'user',
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
 
