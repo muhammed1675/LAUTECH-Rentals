@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabase';
 
 const AuthContext = createContext(null);
@@ -7,12 +7,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const profileLoadingRef = useRef(false);
 
   const loadUserProfile = useCallback(async (authUser) => {
     if (!authUser?.id) return null;
-    if (profileLoadingRef.current) return null;
-    profileLoadingRef.current = true;
 
     try {
       const { data, error } = await supabase
@@ -22,6 +19,7 @@ export function AuthProvider({ children }) {
         .single();
 
       if (error && error.code === 'PGRST116') {
+        // No profile yet — create one
         const { data: created, error: insertErr } = await supabase
           .from('users')
           .insert({
@@ -35,12 +33,9 @@ export function AuthProvider({ children }) {
           .single();
 
         if (insertErr) {
+          // Trigger may have already created it — retry
           const { data: retry } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', authUser.id)
-            .single();
-
+            .from('users').select('*').eq('id', authUser.id).single();
           if (retry) {
             const { data: w } = await supabase.from('wallets').select('token_balance').eq('user_id', authUser.id).single();
             return { ...retry, token_balance: w?.token_balance || 0 };
@@ -52,8 +47,9 @@ export function AuthProvider({ children }) {
         return { ...created, token_balance: 0 };
       }
 
+      // Ignore lock/abort errors silently — caused by browser tab conflicts
       if (error) {
-        if (error.name === 'AbortError' || error.message?.includes('AbortError') || error.message?.includes('Lock broken')) {
+        if (error.message?.includes('Lock') || error.message?.includes('AbortError') || error.name === 'AbortError') {
           return null;
         }
         console.error('Profile load error:', error.message);
@@ -61,26 +57,22 @@ export function AuthProvider({ children }) {
       }
 
       const { data: wallet } = await supabase
-        .from('wallets')
-        .select('token_balance')
-        .eq('user_id', authUser.id)
-        .single();
+        .from('wallets').select('token_balance').eq('user_id', authUser.id).single();
 
       return { ...data, token_balance: wallet?.token_balance || 0 };
     } catch (err) {
-      if (err.name === 'AbortError' || err.message?.includes('AbortError') || err.message?.includes('Lock broken')) {
+      if (err.message?.includes('Lock') || err.message?.includes('AbortError') || err.name === 'AbortError') {
         return null;
       }
       console.error('loadUserProfile exception:', err);
       return null;
-    } finally {
-      profileLoadingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     let mounted = true;
 
+    // Get initial session
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       if (!mounted) return;
       setSession(s);
@@ -91,16 +83,14 @@ export function AuthProvider({ children }) {
       if (mounted) setLoading(false);
     });
 
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
       if (!mounted) return;
       setSession(s);
-      if (s?.user) {
-        const profile = await loadUserProfile(s.user);
-        if (mounted && profile) setUser(profile);
-      } else {
-        if (mounted) setUser(null);
+      if (!s?.user) {
+        if (mounted) { setUser(null); setLoading(false); }
       }
-      if (mounted) setLoading(false);
+      // Don't load profile here — login() handles it directly to avoid race
     });
 
     return () => {
@@ -110,22 +100,27 @@ export function AuthProvider({ children }) {
   }, [loadUserProfile]);
 
   const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      if (error.message?.toLowerCase().includes('email not confirmed')) {
-        throw new Error('Please confirm your email first. Check your inbox for a confirmation link.');
+      if (error) {
+        if (error.message?.toLowerCase().includes('email not confirmed')) {
+          throw new Error('Please confirm your email first. Check your inbox for a confirmation link.');
+        }
+        throw error;
       }
-      throw error;
-    }
 
-    await new Promise(r => setTimeout(r, 500));
-    const profile = await loadUserProfile(data.user);
-    if (!profile) {
-      throw new Error('Could not load your profile. Please contact support.');
+      const profile = await loadUserProfile(data.user);
+      if (!profile) {
+        throw new Error('Could not load your profile. Please contact support.');
+      }
+      setUser(profile);
+      setSession(data.session);
+      return profile;
+    } finally {
+      setLoading(false);
     }
-    setUser(profile);
-    return profile;
   };
 
   const register = async (email, password, fullName) => {
@@ -137,13 +132,16 @@ export function AuthProvider({ children }) {
 
     if (error) throw error;
 
+    // Email confirmation required — session will be null
     if (!data.session) {
       return { requiresConfirmation: true };
     }
 
-    await new Promise(r => setTimeout(r, 1500));
+    // No email confirmation — log in immediately
+    await new Promise(r => setTimeout(r, 1000));
     const profile = await loadUserProfile(data.user);
     setUser(profile);
+    setSession(data.session);
     return profile;
   };
 
@@ -154,8 +152,9 @@ export function AuthProvider({ children }) {
   };
 
   const refreshUser = async () => {
-    if (session?.user) {
-      const profile = await loadUserProfile(session.user);
+    const { data: { session: s } } = await supabase.auth.getSession();
+    if (s?.user) {
+      const profile = await loadUserProfile(s.user);
       if (profile) setUser(profile);
     }
   };
