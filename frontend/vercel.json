@@ -1,6 +1,6 @@
 {
   "installCommand": "yarn install",
-  "buildCommand": "CI=false yarn build",
+  "buildCommand": "DISABLE_ESLINT_PLUGIN=true yarn build",
   "outputDirectory": "build",
   "rewrites": [
     { "source": "/((?!static|favicon|manifest|robots|logo).*)", "destination": "/index.html" }
