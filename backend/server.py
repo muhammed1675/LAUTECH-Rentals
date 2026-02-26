@@ -2,26 +2,29 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from supabase import create_client, Client
 import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone, timedelta
-import hashlib
-import secrets
+from datetime import datetime, timezone
 import hmac
+import hashlib
 import json
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Supabase connection
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
+
+# Create Supabase clients
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY) if SUPABASE_URL else None
+supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY) if SUPABASE_URL and SUPABASE_SERVICE_KEY else None
 
 # Create the main app
 app = FastAPI(title="LAUTECH Rentals API")
@@ -31,7 +34,6 @@ api_router = APIRouter(prefix="/api")
 
 # Security
 security = HTTPBearer(auto_error=False)
-JWT_SECRET = os.environ.get('JWT_SECRET', 'lautech-rentals-secret-key-change-in-production')
 KORALPAY_SECRET = os.environ.get('KORALPAY_SECRET_KEY', '')
 KORALPAY_WEBHOOK_SECRET = os.environ.get('KORALPAY_WEBHOOK_SECRET', '')
 
@@ -50,14 +52,6 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-class UserResponse(BaseModel):
-    id: str
-    email: str
-    full_name: str
-    role: str
-    suspended: bool
-    created_at: str
-
 class AgentVerificationRequest(BaseModel):
     id_card_url: str
     selfie_url: str
@@ -68,7 +62,7 @@ class PropertyCreate(BaseModel):
     description: str
     price: int
     location: str
-    property_type: str  # hostel or apartment
+    property_type: str
     images: List[str]
     contact_name: str
     contact_phone: str
@@ -103,7 +97,7 @@ class SuspendUserRequest(BaseModel):
     suspended: bool
 
 class ApprovalRequest(BaseModel):
-    status: str  # approved or rejected
+    status: str
 
 class InspectionUpdateRequest(BaseModel):
     status: Optional[str] = None
@@ -111,127 +105,148 @@ class InspectionUpdateRequest(BaseModel):
 
 # ============== HELPERS ==============
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def generate_token(user_id: str, role: str) -> str:
-    payload = {
-        "user_id": user_id,
-        "role": role,
-        "exp": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
-    }
-    token_data = json.dumps(payload)
-    signature = hmac.new(JWT_SECRET.encode(), token_data.encode(), hashlib.sha256).hexdigest()
-    import base64
-    return base64.b64encode(f"{token_data}|{signature}".encode()).decode()
-
-def verify_token(token: str) -> dict:
-    try:
-        import base64
-        decoded = base64.b64decode(token.encode()).decode()
-        token_data, signature = decoded.rsplit('|', 1)
-        expected_sig = hmac.new(JWT_SECRET.encode(), token_data.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected_sig):
-            return None
-        payload = json.loads(token_data)
-        exp = datetime.fromisoformat(payload['exp'])
-        if datetime.now(timezone.utc) > exp:
-            return None
-        return payload
-    except Exception as e:
-        logger.error(f"Token verification error: {e}")
-        return None
+def generate_reference(prefix: str) -> str:
+    return f"{prefix}-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = verify_token(credentials.credentials)
-    if not payload:
+    
+    try:
+        # Verify the JWT token with Supabase
+        user_response = supabase.auth.get_user(credentials.credentials)
+        if not user_response or not user_response.user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        supabase_user = user_response.user
+        
+        # Get user profile from our users table
+        result = supabase_admin.table('users').select('*').eq('id', supabase_user.id).single().execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=401, detail="User profile not found")
+        
+        user = result.data
+        if user.get('suspended'):
+            raise HTTPException(status_code=403, detail="Account suspended")
+        
+        return user
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    user = await db.users.find_one({"id": payload['user_id']}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    if user.get('suspended'):
-        raise HTTPException(status_code=403, detail="Account suspended")
-    return user
 
 async def require_role(user: dict, roles: List[str]):
     if user['role'] not in roles:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return user
 
-def generate_reference(prefix: str) -> str:
-    return f"{prefix}-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
-
 # ============== AUTH ROUTES ==============
 
 @api_router.post("/auth/register")
 async def register(data: UserCreate):
-    existing = await db.users.find_one({"email": data.email})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    user_id = str(uuid.uuid4())
-    user = {
-        "id": user_id,
-        "email": data.email,
-        "password": hash_password(data.password),
-        "full_name": data.full_name,
-        "role": "user",
-        "suspended": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.users.insert_one(user)
-    
-    # Create wallet
-    await db.wallets.insert_one({
-        "user_id": user_id,
-        "token_balance": 0,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    
-    token = generate_token(user_id, "user")
-    return {
-        "token": token,
-        "user": {
+    try:
+        # Create user in Supabase Auth
+        auth_response = supabase.auth.sign_up({
+            "email": data.email,
+            "password": data.password,
+            "options": {
+                "data": {
+                    "full_name": data.full_name
+                }
+            }
+        })
+        
+        if not auth_response.user:
+            raise HTTPException(status_code=400, detail="Registration failed")
+        
+        user_id = auth_response.user.id
+        
+        # Create user profile in users table
+        user_profile = {
             "id": user_id,
             "email": data.email,
             "full_name": data.full_name,
             "role": "user",
-            "suspended": False
+            "suspended": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
-    }
+        supabase_admin.table('users').insert(user_profile).execute()
+        
+        # Create wallet for user
+        wallet = {
+            "user_id": user_id,
+            "token_balance": 0,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        supabase_admin.table('wallets').insert(wallet).execute()
+        
+        return {
+            "token": auth_response.session.access_token if auth_response.session else None,
+            "user": {
+                "id": user_id,
+                "email": data.email,
+                "full_name": data.full_name,
+                "role": "user",
+                "suspended": False
+            }
+        }
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        if "already registered" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @api_router.post("/auth/login")
 async def login(data: UserLogin):
-    user = await db.users.find_one({"email": data.email}, {"_id": 0})
-    if not user or user['password'] != hash_password(data.password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if user.get('suspended'):
-        raise HTTPException(status_code=403, detail="Account suspended")
-    
-    token = generate_token(user['id'], user['role'])
-    return {
-        "token": token,
-        "user": {
-            "id": user['id'],
-            "email": user['email'],
-            "full_name": user['full_name'],
-            "role": user['role'],
-            "suspended": user['suspended']
+    try:
+        # Sign in with Supabase Auth
+        auth_response = supabase.auth.sign_in_with_password({
+            "email": data.email,
+            "password": data.password
+        })
+        
+        if not auth_response.user or not auth_response.session:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # Get user profile
+        result = supabase_admin.table('users').select('*').eq('id', auth_response.user.id).single().execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=401, detail="User profile not found")
+        
+        user = result.data
+        if user.get('suspended'):
+            raise HTTPException(status_code=403, detail="Account suspended")
+        
+        return {
+            "token": auth_response.session.access_token,
+            "user": {
+                "id": user['id'],
+                "email": user['email'],
+                "full_name": user['full_name'],
+                "role": user['role'],
+                "suspended": user['suspended']
+            }
         }
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @api_router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
-    wallet = await db.wallets.find_one({"user_id": user['id']}, {"_id": 0})
+    # Get wallet balance
+    wallet_result = supabase_admin.table('wallets').select('token_balance').eq('user_id', user['id']).single().execute()
+    token_balance = wallet_result.data.get('token_balance', 0) if wallet_result.data else 0
+    
     return {
         "id": user['id'],
         "email": user['email'],
         "full_name": user['full_name'],
         "role": user['role'],
         "suspended": user['suspended'],
-        "token_balance": wallet.get('token_balance', 0) if wallet else 0
+        "token_balance": token_balance
     }
 
 # ============== AGENT VERIFICATION ROUTES ==============
@@ -241,11 +256,9 @@ async def request_agent_verification(data: AgentVerificationRequest, user: dict 
     if user['role'] != 'user':
         raise HTTPException(status_code=400, detail="Only regular users can request agent verification")
     
-    existing = await db.agent_verification_requests.find_one({
-        "user_id": user['id'],
-        "status": "pending"
-    })
-    if existing:
+    # Check for existing pending request
+    existing = supabase_admin.table('agent_verification_requests').select('id').eq('user_id', user['id']).eq('status', 'pending').execute()
+    if existing.data:
         raise HTTPException(status_code=400, detail="You already have a pending verification request")
     
     request_id = str(uuid.uuid4())
@@ -262,54 +275,47 @@ async def request_agent_verification(data: AgentVerificationRequest, user: dict 
         "reviewed_at": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.agent_verification_requests.insert_one(verification)
+    supabase_admin.table('agent_verification_requests').insert(verification).execute()
     return {"message": "Verification request submitted", "request_id": request_id}
 
 @api_router.get("/agent-verification/my-request")
 async def get_my_verification_request(user: dict = Depends(get_current_user)):
-    request = await db.agent_verification_requests.find_one(
-        {"user_id": user['id']},
-        {"_id": 0}
-    )
-    return request
+    result = supabase_admin.table('agent_verification_requests').select('*').eq('user_id', user['id']).order('created_at', desc=True).limit(1).execute()
+    return result.data[0] if result.data else None
 
 @api_router.get("/agent-verification/pending")
 async def get_pending_verifications(user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
-    requests = await db.agent_verification_requests.find(
-        {"status": "pending"},
-        {"_id": 0}
-    ).to_list(100)
-    return requests
+    result = supabase_admin.table('agent_verification_requests').select('*').eq('status', 'pending').execute()
+    return result.data
 
 @api_router.get("/agent-verification/all")
 async def get_all_verifications(user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
-    requests = await db.agent_verification_requests.find({}, {"_id": 0}).to_list(500)
-    return requests
+    result = supabase_admin.table('agent_verification_requests').select('*').order('created_at', desc=True).execute()
+    return result.data
 
 @api_router.post("/agent-verification/{request_id}/review")
 async def review_verification(request_id: str, data: ApprovalRequest, user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
     
-    verification = await db.agent_verification_requests.find_one({"id": request_id})
-    if not verification:
+    # Get verification request
+    result = supabase_admin.table('agent_verification_requests').select('*').eq('id', request_id).single().execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="Request not found")
     
-    await db.agent_verification_requests.update_one(
-        {"id": request_id},
-        {"$set": {
-            "status": data.status,
-            "reviewed_by_admin_id": user['id'],
-            "reviewed_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+    verification = result.data
     
+    # Update verification status
+    supabase_admin.table('agent_verification_requests').update({
+        "status": data.status,
+        "reviewed_by_admin_id": user['id'],
+        "reviewed_at": datetime.now(timezone.utc).isoformat()
+    }).eq('id', request_id).execute()
+    
+    # If approved, update user role to agent
     if data.status == "approved":
-        await db.users.update_one(
-            {"id": verification['user_id']},
-            {"$set": {"role": "agent"}}
-        )
+        supabase_admin.table('users').update({"role": "agent"}).eq('id', verification['user_id']).execute()
     
     return {"message": f"Verification {data.status}"}
 
@@ -336,7 +342,7 @@ async def create_property(data: PropertyCreate, user: dict = Depends(get_current
         "approved_by_admin_id": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.properties.insert_one(property_doc)
+    supabase_admin.table('properties').insert(property_doc).execute()
     return {"message": "Property created", "property_id": property_id}
 
 @api_router.get("/properties")
@@ -346,79 +352,70 @@ async def get_properties(
     min_price: Optional[int] = None,
     max_price: Optional[int] = None
 ):
-    query = {}
+    query = supabase_admin.table('properties').select('*')
+    
     if status:
-        query["status"] = status
+        query = query.eq('status', status)
     else:
-        query["status"] = "approved"  # Default to approved for public
+        query = query.eq('status', 'approved')
     
     if property_type:
-        query["property_type"] = property_type
+        query = query.eq('property_type', property_type)
     
-    if min_price is not None or max_price is not None:
-        query["price"] = {}
-        if min_price is not None:
-            query["price"]["$gte"] = min_price
-        if max_price is not None:
-            query["price"]["$lte"] = max_price
-        if not query["price"]:
-            del query["price"]
+    if min_price is not None:
+        query = query.gte('price', min_price)
     
-    properties = await db.properties.find(query, {"_id": 0}).to_list(500)
-    return properties
+    if max_price is not None:
+        query = query.lte('price', max_price)
+    
+    result = query.order('created_at', desc=True).execute()
+    return result.data
 
 @api_router.get("/properties/my-listings")
 async def get_my_listings(user: dict = Depends(get_current_user)):
     await require_role(user, ['agent', 'admin'])
-    properties = await db.properties.find(
-        {"uploaded_by_agent_id": user['id']},
-        {"_id": 0}
-    ).to_list(500)
-    return properties
+    result = supabase_admin.table('properties').select('*').eq('uploaded_by_agent_id', user['id']).order('created_at', desc=True).execute()
+    return result.data
 
 @api_router.get("/properties/pending")
 async def get_pending_properties(user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
-    properties = await db.properties.find({"status": "pending"}, {"_id": 0}).to_list(500)
-    return properties
+    result = supabase_admin.table('properties').select('*').eq('status', 'pending').execute()
+    return result.data
 
 @api_router.get("/properties/all")
 async def get_all_properties(user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
-    properties = await db.properties.find({}, {"_id": 0}).to_list(500)
-    return properties
+    result = supabase_admin.table('properties').select('*').order('created_at', desc=True).execute()
+    return result.data
 
 @api_router.get("/properties/{property_id}")
 async def get_property(property_id: str, user: dict = Depends(get_current_user)):
-    property_doc = await db.properties.find_one({"id": property_id}, {"_id": 0})
-    if not property_doc:
+    result = supabase_admin.table('properties').select('*').eq('id', property_id).single().execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="Property not found")
     
+    property_doc = result.data
+    
     # Check if user has unlocked this property
-    unlock = await db.unlocks.find_one({
-        "user_id": user['id'],
-        "property_id": property_id
-    })
+    unlock_result = supabase_admin.table('unlocks').select('id').eq('user_id', user['id']).eq('property_id', property_id).execute()
     
     response = dict(property_doc)
-    response['contact_unlocked'] = unlock is not None
+    response['contact_unlocked'] = len(unlock_result.data) > 0
     
     # Hide contact info if not unlocked (and not agent/admin)
-    if not unlock and user['role'] == 'user':
+    if not response['contact_unlocked'] and user['role'] == 'user':
         response['contact_phone'] = "***LOCKED***"
     
     return response
 
 @api_router.get("/properties/{property_id}/public")
 async def get_property_public(property_id: str):
-    property_doc = await db.properties.find_one(
-        {"id": property_id, "status": "approved"},
-        {"_id": 0}
-    )
-    if not property_doc:
+    result = supabase_admin.table('properties').select('*').eq('id', property_id).eq('status', 'approved').single().execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="Property not found")
     
-    response = dict(property_doc)
+    response = dict(result.data)
     response['contact_phone'] = "***LOCKED***"
     response['contact_unlocked'] = False
     return response
@@ -427,16 +424,17 @@ async def get_property_public(property_id: str):
 async def update_property(property_id: str, data: PropertyUpdate, user: dict = Depends(get_current_user)):
     await require_role(user, ['agent', 'admin'])
     
-    property_doc = await db.properties.find_one({"id": property_id})
-    if not property_doc:
+    result = supabase_admin.table('properties').select('*').eq('id', property_id).single().execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="Property not found")
     
+    property_doc = result.data
     if user['role'] == 'agent' and property_doc['uploaded_by_agent_id'] != user['id']:
         raise HTTPException(status_code=403, detail="Not authorized to edit this property")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     if update_data:
-        await db.properties.update_one({"id": property_id}, {"$set": update_data})
+        supabase_admin.table('properties').update(update_data).eq('id', property_id).execute()
     
     return {"message": "Property updated"}
 
@@ -444,49 +442,46 @@ async def update_property(property_id: str, data: PropertyUpdate, user: dict = D
 async def delete_property(property_id: str, user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
     
-    result = await db.properties.delete_one({"id": property_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Property not found")
-    
+    supabase_admin.table('properties').delete().eq('id', property_id).execute()
     return {"message": "Property deleted"}
 
 @api_router.post("/properties/{property_id}/approve")
 async def approve_property(property_id: str, data: ApprovalRequest, user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
     
-    await db.properties.update_one(
-        {"id": property_id},
-        {"$set": {
-            "status": data.status,
-            "approved_by_admin_id": user['id']
-        }}
-    )
+    supabase_admin.table('properties').update({
+        "status": data.status,
+        "approved_by_admin_id": user['id']
+    }).eq('id', property_id).execute()
+    
     return {"message": f"Property {data.status}"}
 
 # ============== WALLET & TOKEN ROUTES ==============
 
 @api_router.get("/wallet")
 async def get_wallet(user: dict = Depends(get_current_user)):
-    wallet = await db.wallets.find_one({"user_id": user['id']}, {"_id": 0})
-    if not wallet:
+    result = supabase_admin.table('wallets').select('*').eq('user_id', user['id']).single().execute()
+    if not result.data:
+        # Create wallet if doesn't exist
         wallet = {
             "user_id": user['id'],
             "token_balance": 0,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.wallets.insert_one(wallet)
-    return wallet
+        supabase_admin.table('wallets').insert(wallet).execute()
+        return wallet
+    return result.data
 
 @api_router.get("/wallet/{user_id}")
 async def get_user_wallet(user_id: str, user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
-    wallet = await db.wallets.find_one({"user_id": user_id}, {"_id": 0})
-    return wallet
+    result = supabase_admin.table('wallets').select('*').eq('user_id', user_id).single().execute()
+    return result.data
 
 @api_router.post("/tokens/purchase")
 async def initiate_token_purchase(data: TokenPurchaseRequest, user: dict = Depends(get_current_user)):
     reference = generate_reference("TOKEN")
-    amount = data.quantity * 1000  # ₦1000 per token
+    amount = data.quantity * 1000
     
     transaction = {
         "id": str(uuid.uuid4()),
@@ -498,9 +493,8 @@ async def initiate_token_purchase(data: TokenPurchaseRequest, user: dict = Depen
         "koralpay_reference": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.transactions.insert_one(transaction)
+    supabase_admin.table('transactions').insert(transaction).execute()
     
-    # Return checkout URL (in production, integrate with KoralPay API)
     koralpay_public_key = os.environ.get('KORALPAY_PUBLIC_KEY', 'pk_test_xxx')
     checkout_url = f"https://checkout.korapay.com/checkout?amount={amount}&currency=NGN&reference={reference}&merchant={koralpay_public_key}"
     
@@ -515,28 +509,25 @@ async def initiate_token_purchase(data: TokenPurchaseRequest, user: dict = Depen
 @api_router.post("/properties/{property_id}/unlock")
 async def unlock_property_contact(property_id: str, user: dict = Depends(get_current_user)):
     # Check if already unlocked
-    existing = await db.unlocks.find_one({
-        "user_id": user['id'],
-        "property_id": property_id
-    })
-    if existing:
+    existing = supabase_admin.table('unlocks').select('id').eq('user_id', user['id']).eq('property_id', property_id).execute()
+    if existing.data:
         raise HTTPException(status_code=400, detail="Already unlocked")
     
     # Check wallet balance
-    wallet = await db.wallets.find_one({"user_id": user['id']})
-    if not wallet or wallet.get('token_balance', 0) < 1:
+    wallet_result = supabase_admin.table('wallets').select('token_balance').eq('user_id', user['id']).single().execute()
+    if not wallet_result.data or wallet_result.data.get('token_balance', 0) < 1:
         raise HTTPException(status_code=400, detail="Insufficient token balance")
     
     # Check property exists
-    property_doc = await db.properties.find_one({"id": property_id, "status": "approved"})
-    if not property_doc:
+    property_result = supabase_admin.table('properties').select('*').eq('id', property_id).eq('status', 'approved').single().execute()
+    if not property_result.data:
         raise HTTPException(status_code=404, detail="Property not found")
     
+    property_doc = property_result.data
+    
     # Deduct token
-    await db.wallets.update_one(
-        {"user_id": user['id']},
-        {"$inc": {"token_balance": -1}}
-    )
+    new_balance = wallet_result.data['token_balance'] - 1
+    supabase_admin.table('wallets').update({"token_balance": new_balance}).eq('user_id', user['id']).execute()
     
     # Create unlock record
     unlock = {
@@ -545,7 +536,7 @@ async def unlock_property_contact(property_id: str, user: dict = Depends(get_cur
         "property_id": property_id,
         "unlocked_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.unlocks.insert_one(unlock)
+    supabase_admin.table('unlocks').insert(unlock).execute()
     
     return {
         "message": "Contact unlocked",
@@ -555,19 +546,15 @@ async def unlock_property_contact(property_id: str, user: dict = Depends(get_cur
 
 @api_router.get("/unlocks")
 async def get_my_unlocks(user: dict = Depends(get_current_user)):
-    unlocks = await db.unlocks.find({"user_id": user['id']}, {"_id": 0}).to_list(500)
+    unlocks_result = supabase_admin.table('unlocks').select('*').eq('user_id', user['id']).execute()
     
-    # Get property details for each unlock
     result = []
-    for unlock in unlocks:
-        property_doc = await db.properties.find_one(
-            {"id": unlock['property_id']},
-            {"_id": 0}
-        )
-        if property_doc:
+    for unlock in unlocks_result.data:
+        property_result = supabase_admin.table('properties').select('*').eq('id', unlock['property_id']).single().execute()
+        if property_result.data:
             result.append({
                 **unlock,
-                "property": property_doc
+                "property": property_result.data
             })
     
     return result
@@ -577,10 +564,11 @@ async def get_my_unlocks(user: dict = Depends(get_current_user)):
 @api_router.post("/inspections")
 async def request_inspection(data: InspectionRequest, user: dict = Depends(get_current_user)):
     # Check property exists
-    property_doc = await db.properties.find_one({"id": data.property_id, "status": "approved"})
-    if not property_doc:
+    property_result = supabase_admin.table('properties').select('*').eq('id', data.property_id).eq('status', 'approved').single().execute()
+    if not property_result.data:
         raise HTTPException(status_code=404, detail="Property not found")
     
+    property_doc = property_result.data
     reference = generate_reference("INSP")
     inspection_id = str(uuid.uuid4())
     
@@ -599,7 +587,7 @@ async def request_inspection(data: InspectionRequest, user: dict = Depends(get_c
         "payment_reference": reference,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.inspections.insert_one(inspection)
+    supabase_admin.table('inspections').insert(inspection).execute()
     
     # Create inspection transaction
     transaction = {
@@ -612,7 +600,7 @@ async def request_inspection(data: InspectionRequest, user: dict = Depends(get_c
         "koralpay_reference": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.inspection_transactions.insert_one(transaction)
+    supabase_admin.table('inspection_transactions').insert(transaction).execute()
     
     koralpay_public_key = os.environ.get('KORALPAY_PUBLIC_KEY', 'pk_test_xxx')
     checkout_url = f"https://checkout.korapay.com/checkout?amount=2000&currency=NGN&reference={reference}&merchant={koralpay_public_key}"
@@ -627,34 +615,29 @@ async def request_inspection(data: InspectionRequest, user: dict = Depends(get_c
 
 @api_router.get("/inspections")
 async def get_my_inspections(user: dict = Depends(get_current_user)):
-    inspections = await db.inspections.find(
-        {"user_id": user['id']},
-        {"_id": 0}
-    ).to_list(500)
-    return inspections
+    result = supabase_admin.table('inspections').select('*').eq('user_id', user['id']).order('created_at', desc=True).execute()
+    return result.data
 
 @api_router.get("/inspections/assigned")
 async def get_assigned_inspections(user: dict = Depends(get_current_user)):
     await require_role(user, ['agent', 'admin'])
-    inspections = await db.inspections.find(
-        {"agent_id": user['id']},
-        {"_id": 0}
-    ).to_list(500)
-    return inspections
+    result = supabase_admin.table('inspections').select('*').eq('agent_id', user['id']).order('created_at', desc=True).execute()
+    return result.data
 
 @api_router.get("/inspections/all")
 async def get_all_inspections(user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
-    inspections = await db.inspections.find({}, {"_id": 0}).to_list(500)
-    return inspections
+    result = supabase_admin.table('inspections').select('*').order('created_at', desc=True).execute()
+    return result.data
 
 @api_router.put("/inspections/{inspection_id}")
 async def update_inspection(inspection_id: str, data: InspectionUpdateRequest, user: dict = Depends(get_current_user)):
-    inspection = await db.inspections.find_one({"id": inspection_id})
-    if not inspection:
+    result = supabase_admin.table('inspections').select('*').eq('id', inspection_id).single().execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="Inspection not found")
     
-    # Agents can only mark their assigned inspections as completed
+    inspection = result.data
+    
     if user['role'] == 'agent':
         if inspection['agent_id'] != user['id']:
             raise HTTPException(status_code=403, detail="Not authorized")
@@ -665,21 +648,22 @@ async def update_inspection(inspection_id: str, data: InspectionUpdateRequest, u
     if data.status:
         update_data['status'] = data.status
     if data.agent_id and user['role'] == 'admin':
-        # Get agent name
-        agent = await db.users.find_one({"id": data.agent_id}, {"_id": 0})
+        agent_result = supabase_admin.table('users').select('full_name').eq('id', data.agent_id).single().execute()
         update_data['agent_id'] = data.agent_id
-        update_data['agent_name'] = agent['full_name'] if agent else ''
+        update_data['agent_name'] = agent_result.data['full_name'] if agent_result.data else ''
     
     if update_data:
-        await db.inspections.update_one({"id": inspection_id}, {"$set": update_data})
+        supabase_admin.table('inspections').update(update_data).eq('id', inspection_id).execute()
     
     return {"message": "Inspection updated"}
 
 @api_router.get("/inspections/{inspection_id}/agent-contact")
 async def get_inspection_agent_contact(inspection_id: str, user: dict = Depends(get_current_user)):
-    inspection = await db.inspections.find_one({"id": inspection_id})
-    if not inspection:
+    result = supabase_admin.table('inspections').select('*').eq('id', inspection_id).single().execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="Inspection not found")
+    
+    inspection = result.data
     
     if inspection['user_id'] != user['id'] and user['role'] not in ['admin']:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -687,44 +671,37 @@ async def get_inspection_agent_contact(inspection_id: str, user: dict = Depends(
     if inspection['payment_status'] != 'completed':
         raise HTTPException(status_code=400, detail="Payment not completed")
     
-    agent = await db.users.find_one({"id": inspection['agent_id']}, {"_id": 0})
-    if not agent:
+    agent_result = supabase_admin.table('users').select('full_name, email').eq('id', inspection['agent_id']).single().execute()
+    if not agent_result.data:
         raise HTTPException(status_code=404, detail="Agent not found")
     
     return {
-        "agent_name": agent['full_name'],
-        "agent_email": agent['email']
+        "agent_name": agent_result.data['full_name'],
+        "agent_email": agent_result.data['email']
     }
 
 # ============== TRANSACTION ROUTES ==============
 
 @api_router.get("/transactions")
 async def get_my_transactions(user: dict = Depends(get_current_user)):
-    token_txs = await db.transactions.find(
-        {"user_id": user['id']},
-        {"_id": 0}
-    ).to_list(500)
-    
-    inspection_txs = await db.inspection_transactions.find(
-        {"user_id": user['id']},
-        {"_id": 0}
-    ).to_list(500)
+    token_result = supabase_admin.table('transactions').select('*').eq('user_id', user['id']).order('created_at', desc=True).execute()
+    inspection_result = supabase_admin.table('inspection_transactions').select('*').eq('user_id', user['id']).order('created_at', desc=True).execute()
     
     return {
-        "token_transactions": token_txs,
-        "inspection_transactions": inspection_txs
+        "token_transactions": token_result.data,
+        "inspection_transactions": inspection_result.data
     }
 
 @api_router.get("/transactions/all")
 async def get_all_transactions(user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
     
-    token_txs = await db.transactions.find({}, {"_id": 0}).to_list(1000)
-    inspection_txs = await db.inspection_transactions.find({}, {"_id": 0}).to_list(1000)
+    token_result = supabase_admin.table('transactions').select('*').order('created_at', desc=True).execute()
+    inspection_result = supabase_admin.table('inspection_transactions').select('*').order('created_at', desc=True).execute()
     
     return {
-        "token_transactions": token_txs,
-        "inspection_transactions": inspection_txs
+        "token_transactions": token_result.data,
+        "inspection_transactions": inspection_result.data
     }
 
 # ============== USER MANAGEMENT (ADMIN) ==============
@@ -732,16 +709,16 @@ async def get_all_transactions(user: dict = Depends(get_current_user)):
 @api_router.get("/users")
 async def get_all_users(user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
-    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
-    return users
+    result = supabase_admin.table('users').select('id, email, full_name, role, suspended, created_at').order('created_at', desc=True).execute()
+    return result.data
 
 @api_router.get("/users/{user_id}")
 async def get_user(user_id: str, user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
-    target_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
-    if not target_user:
+    result = supabase_admin.table('users').select('id, email, full_name, role, suspended, created_at').eq('id', user_id).single().execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="User not found")
-    return target_user
+    return result.data
 
 @api_router.put("/users/{user_id}/role")
 async def update_user_role(user_id: str, data: RoleUpdateRequest, user: dict = Depends(get_current_user)):
@@ -750,26 +727,14 @@ async def update_user_role(user_id: str, data: RoleUpdateRequest, user: dict = D
     if data.role not in ['user', 'agent', 'admin']:
         raise HTTPException(status_code=400, detail="Invalid role")
     
-    result = await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"role": data.role}}
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
+    supabase_admin.table('users').update({"role": data.role}).eq('id', user_id).execute()
     return {"message": f"Role updated to {data.role}"}
 
 @api_router.put("/users/{user_id}/suspend")
 async def suspend_user(user_id: str, data: SuspendUserRequest, user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
     
-    result = await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"suspended": data.suspended}}
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
+    supabase_admin.table('users').update({"suspended": data.suspended}).eq('id', user_id).execute()
     return {"message": f"User {'suspended' if data.suspended else 'unsuspended'}"}
 
 # ============== ADMIN DASHBOARD STATS ==============
@@ -778,37 +743,34 @@ async def suspend_user(user_id: str, data: SuspendUserRequest, user: dict = Depe
 async def get_admin_stats(user: dict = Depends(get_current_user)):
     await require_role(user, ['admin'])
     
-    total_users = await db.users.count_documents({})
-    total_agents = await db.users.count_documents({"role": "agent"})
-    total_properties = await db.properties.count_documents({})
-    approved_properties = await db.properties.count_documents({"status": "approved"})
-    pending_properties = await db.properties.count_documents({"status": "pending"})
-    total_inspections = await db.inspections.count_documents({})
-    pending_inspections = await db.inspections.count_documents({"status": "pending"})
-    completed_inspections = await db.inspections.count_documents({"status": "completed"})
-    pending_verifications = await db.agent_verification_requests.count_documents({"status": "pending"})
+    # Get counts
+    users_result = supabase_admin.table('users').select('id', count='exact').execute()
+    agents_result = supabase_admin.table('users').select('id', count='exact').eq('role', 'agent').execute()
+    properties_result = supabase_admin.table('properties').select('id', count='exact').execute()
+    approved_result = supabase_admin.table('properties').select('id', count='exact').eq('status', 'approved').execute()
+    pending_props_result = supabase_admin.table('properties').select('id', count='exact').eq('status', 'pending').execute()
+    inspections_result = supabase_admin.table('inspections').select('id', count='exact').execute()
+    pending_insp_result = supabase_admin.table('inspections').select('id', count='exact').eq('status', 'pending').execute()
+    completed_insp_result = supabase_admin.table('inspections').select('id', count='exact').eq('status', 'completed').execute()
+    pending_ver_result = supabase_admin.table('agent_verification_requests').select('id', count='exact').eq('status', 'pending').execute()
     
     # Revenue calculations
-    token_revenue = 0
-    token_txs = await db.transactions.find({"status": "completed"}).to_list(10000)
-    for tx in token_txs:
-        token_revenue += tx.get('amount', 0)
+    token_txs = supabase_admin.table('transactions').select('amount').eq('status', 'completed').execute()
+    token_revenue = sum(tx.get('amount', 0) for tx in token_txs.data) if token_txs.data else 0
     
-    inspection_revenue = 0
-    insp_txs = await db.inspection_transactions.find({"status": "completed"}).to_list(10000)
-    for tx in insp_txs:
-        inspection_revenue += tx.get('amount', 0)
+    insp_txs = supabase_admin.table('inspection_transactions').select('amount').eq('status', 'completed').execute()
+    inspection_revenue = sum(tx.get('amount', 0) for tx in insp_txs.data) if insp_txs.data else 0
     
     return {
-        "total_users": total_users,
-        "total_agents": total_agents,
-        "total_properties": total_properties,
-        "approved_properties": approved_properties,
-        "pending_properties": pending_properties,
-        "total_inspections": total_inspections,
-        "pending_inspections": pending_inspections,
-        "completed_inspections": completed_inspections,
-        "pending_verifications": pending_verifications,
+        "total_users": users_result.count or 0,
+        "total_agents": agents_result.count or 0,
+        "total_properties": properties_result.count or 0,
+        "approved_properties": approved_result.count or 0,
+        "pending_properties": pending_props_result.count or 0,
+        "total_inspections": inspections_result.count or 0,
+        "pending_inspections": pending_insp_result.count or 0,
+        "completed_inspections": completed_insp_result.count or 0,
+        "pending_verifications": pending_ver_result.count or 0,
         "token_revenue": token_revenue,
         "inspection_revenue": inspection_revenue,
         "total_revenue": token_revenue + inspection_revenue
@@ -844,73 +806,61 @@ async def handle_koralpay_webhook(request: Request):
     
     if event == "charge.success":
         # Check if token transaction
-        token_tx = await db.transactions.find_one({"reference": reference})
-        if token_tx:
-            await db.transactions.update_one(
-                {"reference": reference},
-                {"$set": {
-                    "status": "completed",
-                    "koralpay_reference": data.get("korapay_reference")
-                }}
-            )
+        token_result = supabase_admin.table('transactions').select('*').eq('reference', reference).single().execute()
+        if token_result.data:
+            token_tx = token_result.data
+            supabase_admin.table('transactions').update({
+                "status": "completed",
+                "koralpay_reference": data.get("korapay_reference")
+            }).eq('reference', reference).execute()
+            
             # Add tokens to wallet
-            await db.wallets.update_one(
-                {"user_id": token_tx['user_id']},
-                {"$inc": {"token_balance": token_tx['tokens_added']}}
-            )
+            wallet_result = supabase_admin.table('wallets').select('token_balance').eq('user_id', token_tx['user_id']).single().execute()
+            new_balance = (wallet_result.data.get('token_balance', 0) if wallet_result.data else 0) + token_tx['tokens_added']
+            supabase_admin.table('wallets').update({"token_balance": new_balance}).eq('user_id', token_tx['user_id']).execute()
             logger.info(f"Token purchase completed: {reference}")
         
         # Check if inspection transaction
-        insp_tx = await db.inspection_transactions.find_one({"reference": reference})
-        if insp_tx:
-            await db.inspection_transactions.update_one(
-                {"reference": reference},
-                {"$set": {
-                    "status": "completed",
-                    "koralpay_reference": data.get("korapay_reference")
-                }}
-            )
+        insp_result = supabase_admin.table('inspection_transactions').select('*').eq('reference', reference).single().execute()
+        if insp_result.data:
+            insp_tx = insp_result.data
+            supabase_admin.table('inspection_transactions').update({
+                "status": "completed",
+                "koralpay_reference": data.get("korapay_reference")
+            }).eq('reference', reference).execute()
+            
             # Update inspection payment status
-            await db.inspections.update_one(
-                {"id": insp_tx['inspection_id']},
-                {"$set": {
-                    "payment_status": "completed",
-                    "status": "assigned"
-                }}
-            )
+            supabase_admin.table('inspections').update({
+                "payment_status": "completed",
+                "status": "assigned"
+            }).eq('id', insp_tx['inspection_id']).execute()
             logger.info(f"Inspection payment completed: {reference}")
     
     elif event == "charge.failed":
-        await db.transactions.update_one(
-            {"reference": reference},
-            {"$set": {"status": "failed"}}
-        )
-        await db.inspection_transactions.update_one(
-            {"reference": reference},
-            {"$set": {"status": "failed"}}
-        )
+        supabase_admin.table('transactions').update({"status": "failed"}).eq('reference', reference).execute()
+        supabase_admin.table('inspection_transactions').update({"status": "failed"}).eq('reference', reference).execute()
     
     return {"status": "success"}
 
 @api_router.post("/payments/verify/{reference}")
 async def verify_payment(reference: str, user: dict = Depends(get_current_user)):
     # Check token transaction
-    token_tx = await db.transactions.find_one({"reference": reference}, {"_id": 0})
-    if token_tx:
+    token_result = supabase_admin.table('transactions').select('*').eq('reference', reference).single().execute()
+    if token_result.data:
         return {
             "type": "token_purchase",
-            "status": token_tx['status'],
-            "amount": token_tx['amount'],
-            "tokens": token_tx['tokens_added']
+            "status": token_result.data['status'],
+            "amount": token_result.data['amount'],
+            "tokens": token_result.data['tokens_added']
         }
     
     # Check inspection transaction
-    insp_tx = await db.inspection_transactions.find_one({"reference": reference}, {"_id": 0})
-    if insp_tx:
+    insp_result = supabase_admin.table('inspection_transactions').select('*').eq('reference', reference).single().execute()
+    if insp_result.data:
         return {
             "type": "inspection",
-            "status": insp_tx['status'],
-            "amount": insp_tx['amount']
+            "status": insp_result.data['status'],
+            "amount": insp_result.data['amount']
         }
     
     raise HTTPException(status_code=404, detail="Transaction not found")
@@ -918,42 +868,56 @@ async def verify_payment(reference: str, user: dict = Depends(get_current_user))
 # Simulate payment completion (for testing without KoralPay)
 @api_router.post("/payments/simulate/{reference}")
 async def simulate_payment(reference: str):
-    # This is for testing only - remove in production
-    token_tx = await db.transactions.find_one({"reference": reference})
-    if token_tx:
-        await db.transactions.update_one(
-            {"reference": reference},
-            {"$set": {"status": "completed"}}
-        )
-        await db.wallets.update_one(
-            {"user_id": token_tx['user_id']},
-            {"$inc": {"token_balance": token_tx['tokens_added']}}
-        )
+    # Check token transaction
+    token_result = supabase_admin.table('transactions').select('*').eq('reference', reference).single().execute()
+    if token_result.data:
+        token_tx = token_result.data
+        supabase_admin.table('transactions').update({"status": "completed"}).eq('reference', reference).execute()
+        
+        # Add tokens to wallet
+        wallet_result = supabase_admin.table('wallets').select('token_balance').eq('user_id', token_tx['user_id']).single().execute()
+        new_balance = (wallet_result.data.get('token_balance', 0) if wallet_result.data else 0) + token_tx['tokens_added']
+        supabase_admin.table('wallets').update({"token_balance": new_balance}).eq('user_id', token_tx['user_id']).execute()
+        
         return {"message": "Token payment simulated", "tokens_added": token_tx['tokens_added']}
     
-    insp_tx = await db.inspection_transactions.find_one({"reference": reference})
-    if insp_tx:
-        await db.inspection_transactions.update_one(
-            {"reference": reference},
-            {"$set": {"status": "completed"}}
-        )
-        await db.inspections.update_one(
-            {"id": insp_tx['inspection_id']},
-            {"$set": {"payment_status": "completed", "status": "assigned"}}
-        )
+    # Check inspection transaction
+    insp_result = supabase_admin.table('inspection_transactions').select('*').eq('reference', reference).single().execute()
+    if insp_result.data:
+        insp_tx = insp_result.data
+        supabase_admin.table('inspection_transactions').update({"status": "completed"}).eq('reference', reference).execute()
+        supabase_admin.table('inspections').update({
+            "payment_status": "completed",
+            "status": "assigned"
+        }).eq('id', insp_tx['inspection_id']).execute()
+        
         return {"message": "Inspection payment simulated"}
     
     raise HTTPException(status_code=404, detail="Transaction not found")
+
+# ============== STORAGE ROUTES ==============
+
+@api_router.post("/storage/upload-url")
+async def get_upload_url(user: dict = Depends(get_current_user)):
+    """Get a signed URL for uploading files to Supabase Storage"""
+    file_name = f"{user['id']}/{uuid.uuid4().hex}"
+    
+    # This would be implemented with Supabase Storage
+    # For now, return a placeholder response
+    return {
+        "upload_url": f"{SUPABASE_URL}/storage/v1/object/uploads/{file_name}",
+        "file_path": file_name
+    }
 
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/")
 async def root():
-    return {"message": "LAUTECH Rentals API", "version": "1.0.0"}
+    return {"message": "LAUTECH Rentals API", "version": "1.0.0", "database": "Supabase"}
 
 @api_router.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "supabase_connected": supabase is not None}
 
 # Include the router
 app.include_router(api_router)
@@ -965,7 +929,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
