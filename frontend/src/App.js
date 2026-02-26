@@ -50,6 +50,7 @@ function AppRoutes() {
       <Route path="/property/:id" element={<Layout><PropertyDetails /></Layout>} />
       <Route path="/login" element={<Layout><Login /></Layout>} />
       <Route path="/register" element={<Layout><Register /></Layout>} />
+      <Route path="/reset-password" element={<Layout><ResetPassword /></Layout>} />
       <Route path="/payment/callback" element={<Layout><PaymentCallback /></Layout>} />
 
       {/* Protected Routes - Any authenticated user */}
