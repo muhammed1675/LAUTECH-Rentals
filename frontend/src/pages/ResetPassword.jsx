@@ -16,43 +16,50 @@ export function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
-  const [error, setError] = useState('');
+  const [linkExpired, setLinkExpired] = useState(false);
 
   useEffect(() => {
-    // Supabase sends the token in the URL hash like:
-    // /reset-password#access_token=xxx&type=recovery
-    // The onAuthStateChange will fire with event=PASSWORD_RECOVERY
-    // when the hash is present and valid
+    // Check the URL hash for the recovery token
+    const hash = window.location.hash;
+    const params = new URLSearchParams(hash.replace('#', ''));
+    const type = params.get('type');
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        // Valid recovery token — show the form
-        setSessionReady(true);
-      } else if (event === 'SIGNED_IN' && session) {
-        // Already signed in via recovery link
-        setSessionReady(true);
-      }
-    });
+    if (type === 'recovery' && accessToken) {
+      // Set the session manually so user can update password
+      supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken || '',
+      }).then(({ error }) => {
+        if (error) {
+          setLinkExpired(true);
+        } else {
+          setSessionReady(true);
+          // Clear the hash from URL so it's not visible
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      });
+    } else {
+      // No recovery token in URL — check if already in recovery via onAuthStateChange
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setSessionReady(true);
+          setLinkExpired(false);
+        }
+      });
 
-    // Also check if there's already a session (user clicked link and page loaded)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setSessionReady(true);
-      }
-    });
+      // If nothing happens in 2 seconds, link is invalid
+      const timeout = setTimeout(() => {
+        setLinkExpired(true);
+      }, 2000);
 
-    // If no token in URL and no session after 3 seconds, redirect to login
-    const timeout = setTimeout(() => {
-      if (!sessionReady) {
-        setError('Invalid or expired reset link. Please request a new one.');
-      }
-    }, 3000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      return () => {
+        subscription.unsubscribe();
+        clearTimeout(timeout);
+      };
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,8 +71,10 @@ export function ResetPassword() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+
+      // Sign out after reset so they log in fresh
+      await supabase.auth.signOut();
       setDone(true);
-      toast.success('Password updated successfully!');
       setTimeout(() => navigate('/login'), 2500);
     } catch (err) {
       toast.error(err.message || 'Failed to reset password');
@@ -74,8 +83,8 @@ export function ResetPassword() {
     }
   };
 
-  // ── Invalid/expired link ──
-  if (error) {
+  // ── Expired link ──
+  if (linkExpired) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
         <Card className="w-full max-w-md p-8 text-center">
@@ -83,7 +92,9 @@ export function ResetPassword() {
             <AlertCircle className="w-10 h-10 text-red-600" />
           </div>
           <h1 className="text-xl font-bold mb-2">Link Expired</h1>
-          <p className="text-muted-foreground mb-6">{error}</p>
+          <p className="text-muted-foreground mb-6">
+            This reset link has expired or already been used. Please request a new one.
+          </p>
           <Button className="w-full h-12" onClick={() => navigate('/login')}>
             Back to Login
           </Button>
@@ -92,8 +103,8 @@ export function ResetPassword() {
     );
   }
 
-  // ── Loading while waiting for session ──
-  if (!sessionReady) {
+  // ── Loading ──
+  if (!sessionReady && !done) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
         <Card className="w-full max-w-md p-8 text-center">
