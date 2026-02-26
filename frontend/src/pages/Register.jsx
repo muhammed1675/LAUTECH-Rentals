@@ -43,7 +43,7 @@ export function Register() {
       toast.success('Account created successfully!');
       navigate('/browse');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Registration failed');
+      toast.error(error.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

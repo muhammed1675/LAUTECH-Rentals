@@ -38,7 +38,7 @@ export function BecomeAgent() {
       toast.success('Verification request submitted!');
       setSubmitted(true);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to submit request');
+      toast.error(error.message || 'Failed to submit request');
     } finally {
       setLoading(false);
     }

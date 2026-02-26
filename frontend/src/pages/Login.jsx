@@ -31,7 +31,7 @@ export function Login() {
       toast.success('Welcome back!');
       navigate('/browse');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Invalid credentials');
+      toast.error(error.message || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
