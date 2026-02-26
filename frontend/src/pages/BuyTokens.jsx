@@ -27,6 +27,7 @@ export function BuyTokens() {
     }
     fetchWallet();
     setEmail(user?.email || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
   const fetchWallet = async () => {

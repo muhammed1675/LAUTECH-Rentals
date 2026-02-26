@@ -45,6 +45,7 @@ export function PropertyDetails() {
 
   useEffect(() => {
     fetchProperty();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isAuthenticated]);
 
   const fetchProperty = async () => {

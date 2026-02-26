@@ -34,6 +34,7 @@ export function AgentDashboard() {
     if (!isAuthenticated) { navigate('/login'); return; }
     if (!isAgent && !isAdmin) { toast.error('Access denied'); navigate('/'); return; }
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isAgent, isAdmin, user]);
 
   const fetchData = async () => {
