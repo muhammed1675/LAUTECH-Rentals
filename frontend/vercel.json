@@ -1,4 +1,7 @@
 {
+  "installCommand": "yarn install",
+  "buildCommand": "yarn build",
+  "outputDirectory": "build",
   "rewrites": [
     { "source": "/((?!static|favicon|manifest|robots|logo).*)", "destination": "/index.html" }
   ]
