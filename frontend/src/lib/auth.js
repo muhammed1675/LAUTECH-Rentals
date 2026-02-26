@@ -8,36 +8,58 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const loadUserProfile = useCallback(async (authUser) => {
+  const loadUserProfile = useCallback(async (authUser, retries = 3) => {
     if (!authUser?.id) return null;
-    try {
-      const { data, error } = await supabase
-        .from('users').select('*').eq('id', authUser.id).single();
 
-      if (error && error.code === 'PGRST116') {
-        const { data: created } = await supabase
+    for (let i = 0; i < retries; i++) {
+      try {
+        // Wait a bit more on each retry
+        if (i > 0) await new Promise(r => setTimeout(r, 1000 * i));
+
+        const { data, error } = await supabase
           .from('users')
-          .insert({
-            id: authUser.id,
-            email: authUser.email,
-            full_name: authUser.user_metadata?.full_name || authUser.email.split('@')[0],
-            role: 'user',
-            suspended: false
-          })
-          .select().single();
-        await supabase.from('wallets').insert({ user_id: authUser.id, token_balance: 0 });
-        return created ? { ...created, token_balance: 0 } : null;
+          .select('*')
+          .eq('id', authUser.id)
+          .single();
+
+        if (error && error.code === 'PGRST116') {
+          // No profile row — create it
+          const { data: created } = await supabase
+            .from('users')
+            .insert({
+              id: authUser.id,
+              email: authUser.email,
+              full_name: authUser.user_metadata?.full_name || authUser.email.split('@')[0],
+              role: 'user',
+              suspended: false
+            })
+            .select()
+            .single();
+
+          await supabase.from('wallets').insert({ user_id: authUser.id, token_balance: 0 });
+          return created ? { ...created, token_balance: 0 } : null;
+        }
+
+        if (error) {
+          console.warn(`Profile load attempt ${i + 1} failed:`, error.message);
+          continue; // retry
+        }
+
+        // Success — get wallet too
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('token_balance')
+          .eq('user_id', authUser.id)
+          .single();
+
+        return { ...data, token_balance: wallet?.token_balance || 0 };
+
+      } catch (err) {
+        console.warn(`Profile load attempt ${i + 1} exception:`, err.message);
       }
-
-      if (error) return null;
-
-      const { data: wallet } = await supabase
-        .from('wallets').select('token_balance').eq('user_id', authUser.id).single();
-
-      return { ...data, token_balance: wallet?.token_balance || 0 };
-    } catch {
-      return null;
     }
+
+    return null;
   }, []);
 
   useEffect(() => {
@@ -66,13 +88,43 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
       if (error) {
         if (error.message?.toLowerCase().includes('email not confirmed'))
           throw new Error('Please confirm your email first. Check your inbox.');
+        if (error.message?.toLowerCase().includes('invalid login credentials'))
+          throw new Error('Wrong email or password. Please try again.');
         throw error;
       }
+
+      // Give Supabase a moment to fully establish the session
+      await new Promise(r => setTimeout(r, 800));
+
       const profile = await loadUserProfile(data.user);
-      if (!profile) throw new Error('Could not load profile. Please try again.');
+
+      if (!profile) {
+        // Last resort — check if user row exists via email
+        const { data: found } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', data.user.email)
+          .single();
+
+        if (found) {
+          const { data: wallet } = await supabase
+            .from('wallets')
+            .select('token_balance')
+            .eq('user_id', found.id)
+            .single();
+          const fullProfile = { ...found, token_balance: wallet?.token_balance || 0 };
+          setUser(fullProfile);
+          setSession(data.session);
+          return fullProfile;
+        }
+
+        throw new Error('Could not load your profile. Please try again in a moment.');
+      }
+
       setUser(profile);
       setSession(data.session);
       return profile;
