@@ -51,8 +51,8 @@ export function PropertyDetails() {
     setLoading(true);
     try {
       let response;
-      if (isAuthenticated) {
-        response = await propertyAPI.getById(id);
+      if (isAuthenticated && user) {
+        response = await propertyAPI.getById(id, user.id);
       } else {
         response = await propertyAPI.getPublic(id);
       }
@@ -81,7 +81,7 @@ export function PropertyDetails() {
 
     setUnlocking(true);
     try {
-      const response = await propertyAPI.unlock(id);
+      const response = await propertyAPI.unlock(id, user.id);
       toast.success('Contact unlocked successfully!');
       setProperty({
         ...property,
@@ -90,7 +90,7 @@ export function PropertyDetails() {
       });
       await refreshUser();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to unlock contact');
+      toast.error(error.message || 'Failed to unlock contact');
     } finally {
       setUnlocking(false);
     }
@@ -113,7 +113,7 @@ export function PropertyDetails() {
         inspection_date: format(inspectionDate, 'yyyy-MM-dd'),
         email: inspectionEmail,
         phone_number: inspectionPhone,
-      });
+      }, user);
       
       toast.success('Redirecting to payment...');
       setShowInspectionDialog(false);
@@ -123,7 +123,7 @@ export function PropertyDetails() {
         window.open(response.data.checkout_url, '_blank');
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to request inspection');
+      toast.error(error.message || 'Failed to request inspection');
     } finally {
       setRequestingInspection(false);
     }
