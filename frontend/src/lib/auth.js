@@ -10,17 +10,12 @@ export function AuthProvider({ children }) {
 
   const loadUserProfile = useCallback(async (authUser) => {
     if (!authUser?.id) return null;
-
     try {
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
+        .from('users').select('*').eq('id', authUser.id).single();
 
       if (error && error.code === 'PGRST116') {
-        // No profile yet — create one
-        const { data: created, error: insertErr } = await supabase
+        const { data: created } = await supabase
           .from('users')
           .insert({
             id: authUser.id,
@@ -29,42 +24,18 @@ export function AuthProvider({ children }) {
             role: 'user',
             suspended: false
           })
-          .select()
-          .single();
-
-        if (insertErr) {
-          // Trigger may have already created it — retry
-          const { data: retry } = await supabase
-            .from('users').select('*').eq('id', authUser.id).single();
-          if (retry) {
-            const { data: w } = await supabase.from('wallets').select('token_balance').eq('user_id', authUser.id).single();
-            return { ...retry, token_balance: w?.token_balance || 0 };
-          }
-          return null;
-        }
-
+          .select().single();
         await supabase.from('wallets').insert({ user_id: authUser.id, token_balance: 0 });
-        return { ...created, token_balance: 0 };
+        return created ? { ...created, token_balance: 0 } : null;
       }
 
-      // Ignore lock/abort errors silently — caused by browser tab conflicts
-      if (error) {
-        if (error.message?.includes('Lock') || error.message?.includes('AbortError') || error.name === 'AbortError') {
-          return null;
-        }
-        console.error('Profile load error:', error.message);
-        return null;
-      }
+      if (error) return null;
 
       const { data: wallet } = await supabase
         .from('wallets').select('token_balance').eq('user_id', authUser.id).single();
 
       return { ...data, token_balance: wallet?.token_balance || 0 };
-    } catch (err) {
-      if (err.message?.includes('Lock') || err.message?.includes('AbortError') || err.name === 'AbortError') {
-        return null;
-      }
-      console.error('loadUserProfile exception:', err);
+    } catch {
       return null;
     }
   }, []);
@@ -72,7 +43,6 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       if (!mounted) return;
       setSession(s);
@@ -83,38 +53,26 @@ export function AuthProvider({ children }) {
       if (mounted) setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       if (!mounted) return;
       setSession(s);
-      if (!s?.user) {
-        if (mounted) { setUser(null); setLoading(false); }
-      }
-      // Don't load profile here — login() handles it directly to avoid race
+      if (!s) { setUser(null); setLoading(false); }
     });
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, [loadUserProfile]);
 
   const login = async (email, password) => {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
       if (error) {
-        if (error.message?.toLowerCase().includes('email not confirmed')) {
-          throw new Error('Please confirm your email first. Check your inbox for a confirmation link.');
-        }
+        if (error.message?.toLowerCase().includes('email not confirmed'))
+          throw new Error('Please confirm your email first. Check your inbox.');
         throw error;
       }
-
       const profile = await loadUserProfile(data.user);
-      if (!profile) {
-        throw new Error('Could not load your profile. Please contact support.');
-      }
+      if (!profile) throw new Error('Could not load profile. Please try again.');
       setUser(profile);
       setSession(data.session);
       return profile;
@@ -125,19 +83,11 @@ export function AuthProvider({ children }) {
 
   const register = async (email, password, fullName) => {
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
+      email, password,
       options: { data: { full_name: fullName } }
     });
-
     if (error) throw error;
-
-    // Email confirmation required — session will be null
-    if (!data.session) {
-      return { requiresConfirmation: true };
-    }
-
-    // No email confirmation — log in immediately
+    if (!data.session) return { requiresConfirmation: true };
     await new Promise(r => setTimeout(r, 1000));
     const profile = await loadUserProfile(data.user);
     setUser(profile);
@@ -159,21 +109,23 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const value = {
-    user, session, loading,
-    login, register, logout, refreshUser,
-    isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin',
-    isAgent: user?.role === 'agent',
-    isUser: user?.role === 'user',
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{
+      user, session, loading,
+      login, register, logout, refreshUser,
+      isAuthenticated: !!user,
+      isAdmin: user?.role === 'admin',
+      isAgent: user?.role === 'agent',
+      isUser: user?.role === 'user',
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }
 
