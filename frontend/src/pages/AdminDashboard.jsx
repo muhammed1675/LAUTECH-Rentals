@@ -10,13 +10,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { LayoutDashboard, Users, Shield, Building2, Calendar, Receipt, CheckCircle2, XCircle, Eye, Ban, UserCheck, TrendingUp, Coins, Search, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Users, Shield, Building2, Calendar, Receipt, CheckCircle2, XCircle, Eye, Ban, UserCheck, TrendingUp, Coins, Search, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function AdminDashboard() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isAdmin } = useAuth();
-  
+
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [verifications, setVerifications] = useState([]);
@@ -28,6 +28,9 @@ export function AdminDashboard() {
   const [selectedVerification, setSelectedVerification] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, property: null, deleting: false });
+
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
     if (!isAdmin) { toast.error('Access denied'); navigate('/'); return; }
@@ -38,7 +41,8 @@ export function AdminDashboard() {
     setLoading(true);
     try {
       const [statsRes, usersRes, verificationsRes, propertiesRes, inspectionsRes, txRes] = await Promise.all([
-        adminAPI.getStats(), userAPI.getAll(), verificationAPI.getAll(), propertyAPI.getAllAdmin(), inspectionAPI.getAll(), transactionAPI.getAll(),
+        adminAPI.getStats(), userAPI.getAll(), verificationAPI.getAll(),
+        propertyAPI.getAllAdmin(), inspectionAPI.getAll(), transactionAPI.getAll(),
       ]);
       setStats(statsRes.data); setUsers(usersRes.data); setVerifications(verificationsRes.data);
       setProperties(propertiesRes.data); setInspections(inspectionsRes.data); setTransactions(txRes.data);
@@ -49,23 +53,44 @@ export function AdminDashboard() {
   };
 
   const handleUpdateRole = async (userId, role) => {
-    try { await userAPI.updateRole(userId, role); toast.success('Role updated'); fetchData(); } catch (error) { toast.error('Failed to update role'); }
+    try { await userAPI.updateRole(userId, role); toast.success('Role updated'); fetchData(); }
+    catch (error) { toast.error('Failed to update role'); }
   };
 
   const handleSuspendUser = async (userId, suspended) => {
-    try { await userAPI.suspend(userId, suspended); toast.success(suspended ? 'User suspended' : 'User unsuspended'); fetchData(); } catch (error) { toast.error('Failed to update user'); }
+    try { await userAPI.suspend(userId, suspended); toast.success(suspended ? 'User suspended' : 'User unsuspended'); fetchData(); }
+    catch (error) { toast.error('Failed to update user'); }
   };
 
   const handleReviewVerification = async (requestId, status) => {
-    try { await verificationAPI.review(requestId, status, user.id); toast.success(`Verification ${status}`); setSelectedVerification(null); fetchData(); } catch (error) { toast.error('Failed to review'); }
+    try { await verificationAPI.review(requestId, status, user.id); toast.success(`Verification ${status}`); setSelectedVerification(null); fetchData(); }
+    catch (error) { toast.error('Failed to review'); }
   };
 
   const handleApproveProperty = async (propertyId, status) => {
-    try { await propertyAPI.approve(propertyId, status, user.id); toast.success(`Property ${status}`); fetchData(); } catch (error) { toast.error('Failed to update property'); }
+    try { await propertyAPI.approve(propertyId, status, user.id); toast.success(`Property ${status}`); fetchData(); }
+    catch (error) { toast.error('Failed to update property'); }
   };
 
-  const handleDeleteProperty = async (propertyId) => {
-    try { await propertyAPI.delete(propertyId); toast.success('Property deleted'); fetchData(); } catch (error) { toast.error('Failed to delete property'); }
+  // Opens confirmation dialog
+  const confirmDeleteProperty = (property) => {
+    setDeleteConfirm({ open: true, property, deleting: false });
+  };
+
+  // Actually deletes after confirmation
+  const handleDeleteProperty = async () => {
+    if (!deleteConfirm.property) return;
+    setDeleteConfirm(prev => ({ ...prev, deleting: true }));
+    try {
+      await propertyAPI.delete(deleteConfirm.property.id);
+      toast.success('Property deleted successfully');
+      setDeleteConfirm({ open: false, property: null, deleting: false });
+      fetchData();
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error(error.message || 'Failed to delete property');
+      setDeleteConfirm(prev => ({ ...prev, deleting: false }));
+    }
   };
 
   const formatPrice = (price) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(price);
@@ -91,6 +116,7 @@ export function AdminDashboard() {
           <TabsTrigger value="transactions" className="gap-2"><Receipt className="w-4 h-4" /><span className="hidden sm:inline">Transactions</span></TabsTrigger>
         </TabsList>
 
+        {/* Overview */}
         <TabsContent value="overview">
           {loading ? <div className="grid md:grid-cols-4 gap-4">{[1,2,3,4,5,6,7,8].map(i => <Card key={i} className="p-6 animate-pulse"><div className="h-16 bg-muted rounded" /></Card>)}</div> : (
             <>
@@ -115,6 +141,7 @@ export function AdminDashboard() {
           )}
         </TabsContent>
 
+        {/* Users */}
         <TabsContent value="users">
           <Card className="p-4">
             <div className="flex items-center gap-4 mb-4">
@@ -144,6 +171,7 @@ export function AdminDashboard() {
           </Card>
         </TabsContent>
 
+        {/* Verification */}
         <TabsContent value="verification">
           <div className="space-y-4">
             {verifications.filter(v => v.status === 'pending').length > 0 && (
@@ -175,6 +203,7 @@ export function AdminDashboard() {
           </div>
         </TabsContent>
 
+        {/* Properties */}
         <TabsContent value="properties">
           <div className="space-y-4">
             {properties.filter(p => p.status === 'pending').length > 0 && (
@@ -189,6 +218,7 @@ export function AdminDashboard() {
                         <div className="flex flex-col gap-2">
                           <Button size="sm" onClick={() => handleApproveProperty(p.id, 'approved')}><CheckCircle2 className="w-4 h-4 mr-1" /> Approve</Button>
                           <Button size="sm" variant="destructive" onClick={() => handleApproveProperty(p.id, 'rejected')}><XCircle className="w-4 h-4 mr-1" /> Reject</Button>
+                          <Button size="sm" variant="outline" onClick={() => confirmDeleteProperty(p)}><Trash2 className="w-4 h-4 mr-1" /> Delete</Button>
                         </div>
                       </div>
                     </Card>
@@ -203,12 +233,34 @@ export function AdminDashboard() {
                 <TableBody>
                   {properties.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell><div className="flex items-center gap-3"><img src={p.images?.[0] || 'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg'} alt="" className="w-12 h-12 rounded object-cover" /><div><p className="font-medium">{p.title}</p><p className="text-sm text-muted-foreground">{p.location}</p></div></div></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <img src={p.images?.[0] || 'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg'} alt="" className="w-12 h-12 rounded object-cover" />
+                          <div><p className="font-medium">{p.title}</p><p className="text-sm text-muted-foreground">{p.location}</p></div>
+                        </div>
+                      </TableCell>
                       <TableCell className="capitalize">{p.property_type}</TableCell>
                       <TableCell>{formatPrice(p.price)}</TableCell>
                       <TableCell>{p.uploaded_by_agent_name}</TableCell>
                       <TableCell><Badge className={getStatusBadge(p.status)}>{p.status}</Badge></TableCell>
-                      <TableCell><Button variant="destructive" size="sm" onClick={() => handleDeleteProperty(p.id)}><XCircle className="w-4 h-4" /></Button></TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {p.status === 'pending' && (
+                            <>
+                              <Button size="sm" onClick={() => handleApproveProperty(p.id, 'approved')} title="Approve"><CheckCircle2 className="w-4 h-4" /></Button>
+                              <Button size="sm" variant="outline" onClick={() => handleApproveProperty(p.id, 'rejected')} title="Reject"><XCircle className="w-4 h-4" /></Button>
+                            </>
+                          )}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => confirmDeleteProperty(p)}
+                            title="Delete property"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -217,6 +269,7 @@ export function AdminDashboard() {
           </div>
         </TabsContent>
 
+        {/* Inspections */}
         <TabsContent value="inspections">
           <Card className="overflow-x-auto">
             <Table>
@@ -226,6 +279,7 @@ export function AdminDashboard() {
           </Card>
         </TabsContent>
 
+        {/* Transactions */}
         <TabsContent value="transactions">
           <div className="space-y-6">
             <div>
@@ -250,6 +304,7 @@ export function AdminDashboard() {
         </TabsContent>
       </Tabs>
 
+      {/* Verification Review Dialog */}
       <Dialog open={!!selectedVerification} onOpenChange={() => setSelectedVerification(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Verification Request</DialogTitle><DialogDescription>Review the agent verification documents</DialogDescription></DialogHeader>
@@ -261,7 +316,56 @@ export function AdminDashboard() {
               <div><p className="text-sm text-muted-foreground mb-2">Selfie</p><img src={selectedVerification.selfie_url} alt="Selfie" className="w-full max-h-48 object-contain rounded-lg border" /></div>
             </div>
           )}
-          <DialogFooter><Button variant="outline" onClick={() => setSelectedVerification(null)}>Close</Button><Button onClick={() => handleReviewVerification(selectedVerification.id, 'approved')}>Approve</Button><Button variant="destructive" onClick={() => handleReviewVerification(selectedVerification.id, 'rejected')}>Reject</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedVerification(null)}>Close</Button>
+            <Button onClick={() => handleReviewVerification(selectedVerification.id, 'approved')}>Approve</Button>
+            <Button variant="destructive" onClick={() => handleReviewVerification(selectedVerification.id, 'rejected')}>Reject</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirm.open} onOpenChange={(open) => !deleteConfirm.deleting && setDeleteConfirm({ open, property: null, deleting: false })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" /> Delete Property
+            </DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          {deleteConfirm.property && (
+            <div className="flex items-center gap-4 py-2">
+              <img
+                src={deleteConfirm.property.images?.[0] || 'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg'}
+                alt=""
+                className="w-20 h-16 rounded-lg object-cover flex-shrink-0"
+              />
+              <div>
+                <p className="font-semibold">{deleteConfirm.property.title}</p>
+                <p className="text-sm text-muted-foreground">{deleteConfirm.property.location}</p>
+                <p className="text-sm text-muted-foreground">By: {deleteConfirm.property.uploaded_by_agent_name}</p>
+              </div>
+            </div>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to permanently delete this property? All associated unlocks and inspections will also be removed.
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm({ open: false, property: null, deleting: false })}
+              disabled={deleteConfirm.deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteProperty}
+              disabled={deleteConfirm.deleting}
+            >
+              {deleteConfirm.deleting ? 'Deleting...' : 'Yes, Delete'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
