@@ -2,29 +2,29 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { tokenAPI, walletAPI, paymentAPI } from '../lib/api';
+import { openKorapayCheckout } from '../lib/korapay';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Coins, Plus, Minus, ExternalLink, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Coins, Plus, Minus, CreditCard, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function BuyTokens() {
   const navigate = useNavigate();
   const { user, isAuthenticated, refreshUser } = useAuth();
-  
+
   const [wallet, setWallet] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Test/simulate state (only shown after a purchase is initiated)
   const [pendingReference, setPendingReference] = useState(null);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
+    if (!isAuthenticated) { navigate('/login'); return; }
     fetchWallet();
     setEmail(user?.email || '');
   }, [isAuthenticated, user]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -41,72 +41,88 @@ export function BuyTokens() {
 
   const handlePurchase = async () => {
     if (!email || !phone) {
-      toast.error('Please fill in all fields');
+      toast.error('Please fill in your email and phone number');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await tokenAPI.purchase({
-        quantity,
+      // Create transaction record in DB and get a reference
+      const response = await tokenAPI.purchase({ quantity, email, phone_number: phone }, user.id);
+      const { reference } = response.data;
+      setPendingReference(reference);
+
+      // Open Korapay inline popup — no URL redirect
+      await openKorapayCheckout({
+        reference,
+        amount: quantity * 1000,
         email,
-        phone_number: phone,
-      }, user.id);
-      
-      setPendingReference(response.data.reference);
-      toast.success('Redirecting to payment...');
-      
-      // Open checkout URL in new tab
-      if (response.data.checkout_url) {
-        window.open(response.data.checkout_url, '_blank');
-      }
+        name: user?.full_name || user?.email,
+        narration: `${quantity} Token${quantity > 1 ? 's' : ''} - LAUTECH Rentals`,
+
+        onSuccess: async (data) => {
+          console.log('Payment success:', data);
+          toast.success('Payment successful! Adding tokens to your wallet...');
+          try {
+            // Mark transaction as completed + credit wallet
+            await paymentAPI.simulate(reference);
+            await refreshUser();
+            await fetchWallet();
+            setPendingReference(null);
+            toast.success(`${quantity} token${quantity > 1 ? 's' : ''} added to your wallet!`);
+          } catch (err) {
+            toast.error('Payment received but tokens not added yet. Please refresh.');
+          }
+        },
+
+        onFailed: (data) => {
+          console.error('Payment failed:', data);
+          toast.error('Payment failed. Please try again.');
+          setPendingReference(null);
+        },
+
+        onClose: () => {
+          // User closed the modal — don't show error, they may reopen
+          toast.info('Payment window closed. You can try again.');
+          setLoading(false);
+        },
+      });
+
     } catch (error) {
-      toast.error(error.message || 'Failed to initiate purchase');
+      toast.error(error.message || 'Failed to initiate payment');
     } finally {
       setLoading(false);
     }
   };
 
-  // For testing - simulate payment completion
+  // Testing only — simulate payment success without real payment
   const handleSimulatePayment = async () => {
     if (!pendingReference) return;
-    
     try {
       await paymentAPI.simulate(pendingReference);
-      toast.success('Payment simulated successfully!');
+      toast.success('Payment simulated!');
       await refreshUser();
       await fetchWallet();
       setPendingReference(null);
-    } catch (error) {
+    } catch {
       toast.error('Failed to simulate payment');
     }
   };
 
-  const incrementQuantity = () => setQuantity((prev) => Math.min(prev + 1, 100));
-  const decrementQuantity = () => setQuantity((prev) => Math.max(prev - 1, 1));
-
+  const incrementQuantity = () => setQuantity(prev => Math.min(prev + 1, 100));
+  const decrementQuantity = () => setQuantity(prev => Math.max(prev - 1, 1));
   const totalAmount = quantity * 1000;
 
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN',
-      minimumFractionDigits: 0,
-    }).format(price);
-  };
+  const formatPrice = (price) => new Intl.NumberFormat('en-NG', {
+    style: 'currency', currency: 'NGN', minimumFractionDigits: 0,
+  }).format(price);
 
   if (!isAuthenticated) return null;
 
   return (
     <div className="container mx-auto px-4 py-6" data-testid="buy-tokens-page">
-      {/* Back Button */}
-      <Button
-        variant="ghost"
-        onClick={() => navigate('/profile')}
-        className="mb-4 gap-2"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Profile
+      <Button variant="ghost" onClick={() => navigate('/profile')} className="mb-4 gap-2">
+        <ArrowLeft className="w-4 h-4" /> Back to Profile
       </Button>
 
       <div className="max-w-lg mx-auto">
@@ -116,16 +132,15 @@ export function BuyTokens() {
             <Coins className="w-8 h-8 text-primary" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Buy Tokens</h1>
-          <p className="text-foreground/60 mt-2">
-            Use tokens to unlock property owner contacts
-          </p>
+          <p className="text-foreground/60 mt-2">Use tokens to unlock property owner contacts</p>
         </div>
 
         {/* Current Balance */}
-        <Card className="p-6 mb-6 text-center bg-primary/5">
+        <Card className="p-6 mb-6 text-center bg-primary/5 border-primary/20">
           <p className="text-sm text-foreground/60">Current Balance</p>
           <p className="text-4xl font-bold text-primary mt-1">
-            {user?.token_balance || wallet?.token_balance || 0} <span className="text-lg">tokens</span>
+            {user?.token_balance ?? wallet?.token_balance ?? 0}
+            <span className="text-lg font-normal ml-2">tokens</span>
           </p>
         </Card>
 
@@ -136,13 +151,7 @@ export function BuyTokens() {
             <div>
               <Label>Number of Tokens</Label>
               <div className="flex items-center gap-4 mt-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={decrementQuantity}
-                  disabled={quantity <= 1}
-                  data-testid="decrement-qty"
-                >
+                <Button variant="outline" size="icon" onClick={decrementQuantity} disabled={quantity <= 1} data-testid="decrement-qty">
                   <Minus className="w-4 h-4" />
                 </Button>
                 <Input
@@ -152,13 +161,7 @@ export function BuyTokens() {
                   className="w-24 text-center text-xl font-bold"
                   data-testid="quantity-input"
                 />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={incrementQuantity}
-                  disabled={quantity >= 100}
-                  data-testid="increment-qty"
-                >
+                <Button variant="outline" size="icon" onClick={incrementQuantity} disabled={quantity >= 100} data-testid="increment-qty">
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
@@ -169,26 +172,21 @@ export function BuyTokens() {
               <Label>Quick Select</Label>
               <div className="flex flex-wrap gap-2 mt-2">
                 {[1, 5, 10, 20, 50].map((num) => (
-                  <Button
-                    key={num}
-                    variant={quantity === num ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setQuantity(num)}
-                    data-testid={`quick-select-${num}`}
-                  >
+                  <Button key={num} variant={quantity === num ? 'default' : 'outline'} size="sm"
+                    onClick={() => setQuantity(num)} data-testid={`quick-select-${num}`}>
                     {num}
                   </Button>
                 ))}
               </div>
             </div>
 
-            {/* Price Display */}
+            {/* Price Summary */}
             <Card className="p-4 bg-muted/50">
-              <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-center mb-2 text-sm">
                 <span className="text-foreground/60">Price per token</span>
                 <span>₦1,000</span>
               </div>
-              <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-center mb-2 text-sm">
                 <span className="text-foreground/60">Quantity</span>
                 <span>{quantity}</span>
               </div>
@@ -202,69 +200,37 @@ export function BuyTokens() {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  className="mt-1"
-                  data-testid="purchase-email"
-                />
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com" className="mt-1" data-testid="purchase-email" />
               </div>
               <div>
                 <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+234..."
-                  className="mt-1"
-                  data-testid="purchase-phone"
-                />
+                <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+234..." className="mt-1" data-testid="purchase-phone" />
               </div>
             </div>
 
-            {/* Purchase Button */}
-            <Button
-              onClick={handlePurchase}
-              disabled={loading}
-              className="w-full h-12 gap-2"
-              data-testid="purchase-btn"
-            >
-              {loading ? (
-                'Processing...'
-              ) : (
-                <>
-                  <ExternalLink className="w-4 h-4" />
-                  Pay {formatPrice(totalAmount)}
-                </>
+            {/* Pay Button */}
+            <Button onClick={handlePurchase} disabled={loading} className="w-full h-12 gap-2" data-testid="purchase-btn">
+              {loading ? 'Opening payment...' : (
+                <><CreditCard className="w-4 h-4" /> Pay {formatPrice(totalAmount)}</>
               )}
             </Button>
 
-            {/* Testing: Simulate Payment */}
+            {/* Test simulate button — only shown after initiating a purchase */}
             {pendingReference && (
               <Card className="p-4 bg-yellow-50 border-yellow-200">
-                <p className="text-sm text-yellow-800 mb-2">
-                  <strong>Testing Mode:</strong> Payment reference: {pendingReference}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSimulatePayment}
-                  className="w-full gap-2"
-                  data-testid="simulate-payment-btn"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Simulate Payment Success
+                <p className="text-sm text-yellow-800 mb-2 font-medium">🧪 Test Mode</p>
+                <p className="text-xs text-yellow-700 mb-3">Reference: <code className="bg-yellow-100 px-1 rounded">{pendingReference}</code></p>
+                <Button variant="outline" size="sm" onClick={handleSimulatePayment}
+                  className="w-full gap-2 border-yellow-400 text-yellow-800 hover:bg-yellow-100" data-testid="simulate-payment-btn">
+                  <CheckCircle2 className="w-4 h-4" /> Simulate Payment Success
                 </Button>
               </Card>
             )}
           </div>
         </Card>
 
-        {/* Info */}
         <div className="mt-6 text-center text-sm text-foreground/60">
           <p>Tokens are non-refundable and can only be used to unlock property contacts.</p>
           <p className="mt-1">1 token = 1 property contact unlock</p>
