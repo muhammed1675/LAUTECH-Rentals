@@ -163,7 +163,7 @@ export function AgentDashboard() {
       const data = { ...formData, price: parseInt(formData.price), images: formData.images };
       if (editingProperty) {
         await propertyAPI.update(editingProperty.id, data);
-        toast.success('Property updated');
+        toast.success('Property updated — pending admin re-approval');
       } else {
         await propertyAPI.create(data, user);
         toast.success('Property submitted for approval');
