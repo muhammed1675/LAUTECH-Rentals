@@ -103,11 +103,11 @@ export const propertyAPI = {
   update: async (id, data) => {
     const { error } = await supabase
       .from('properties')
-      .update(data)
+      .update({ ...data, status: 'pending' })
       .eq('id', id);
     
     if (error) throw error;
-    return { data: { message: 'Property updated' } };
+    return { data: { message: 'Property submitted for re-approval' } };
   },
 
   delete: async (id) => {
