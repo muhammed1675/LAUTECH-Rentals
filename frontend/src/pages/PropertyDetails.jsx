@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { propertyAPI, inspectionAPI } from '../lib/api';
+import { openKorapayCheckout } from '../lib/korapay';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -21,7 +22,6 @@ import {
   Building,
   ChevronLeft,
   ChevronRight,
-  ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -108,20 +108,47 @@ export function PropertyDetails() {
 
     setRequestingInspection(true);
     try {
+      // Create inspection record + get reference
       const response = await inspectionAPI.request({
         property_id: id,
         inspection_date: format(inspectionDate, 'yyyy-MM-dd'),
         email: inspectionEmail,
         phone_number: inspectionPhone,
       }, user);
-      
-      toast.success('Redirecting to payment...');
+
+      const { reference } = response.data;
       setShowInspectionDialog(false);
-      
-      // Open checkout URL
-      if (response.data.checkout_url) {
-        window.open(response.data.checkout_url, '_blank');
-      }
+
+      // Open Korapay inline popup
+      await openKorapayCheckout({
+        reference,
+        amount: 2000,
+        email: inspectionEmail,
+        name: user?.full_name || user?.email,
+        narration: `Inspection Fee - ${property?.title}`,
+
+        onSuccess: async (data) => {
+          console.log('Inspection payment success:', data);
+          toast.success('Payment successful! Your inspection has been scheduled.');
+          // Mark inspection payment as completed
+          try {
+            const { paymentAPI } = await import('../lib/api');
+            await paymentAPI.simulate(reference);
+          } catch (err) {
+            console.warn('Could not auto-confirm inspection payment:', err);
+          }
+        },
+
+        onFailed: (data) => {
+          console.error('Inspection payment failed:', data);
+          toast.error('Payment failed. Please try again.');
+        },
+
+        onClose: () => {
+          toast.info('Payment window closed.');
+        },
+      });
+
     } catch (error) {
       toast.error(error.message || 'Failed to request inspection');
     } finally {
@@ -248,7 +275,7 @@ export function PropertyDetails() {
           {/* Property Info */}
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{property.title}</h1>
-            <div className="flex items-center gap-2 mt-2 text-foreground/60">
+            <div className="flex items-center gap-2 mt-2 text-muted-foreground">
               <MapPin className="w-5 h-5" />
               <span>{property.location}</span>
             </div>
@@ -257,7 +284,7 @@ export function PropertyDetails() {
           {/* Description */}
           <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">Description</h2>
-            <p className="text-foreground/60 whitespace-pre-wrap">{property.description}</p>
+            <p className="text-muted-foreground whitespace-pre-wrap">{property.description}</p>
           </Card>
         </div>
 
@@ -265,9 +292,9 @@ export function PropertyDetails() {
         <div className="space-y-6">
           {/* Price Card */}
           <Card className="p-6">
-            <p className="text-sm text-foreground/60">Annual Rent</p>
+            <p className="text-sm text-muted-foreground">Annual Rent</p>
             <p className="text-4xl font-bold text-primary mt-1">{formatPrice(property.price)}</p>
-            <p className="text-sm text-foreground/60">/year</p>
+            <p className="text-sm text-muted-foreground">/year</p>
           </Card>
 
           {/* Contact Card */}
@@ -281,7 +308,7 @@ export function PropertyDetails() {
                 </div>
                 <div>
                   <p className="font-medium">{property.contact_name}</p>
-                  <p className="text-sm text-foreground/60">Property Owner</p>
+                  <p className="text-sm text-muted-foreground">Property Owner</p>
                 </div>
               </div>
 
@@ -298,7 +325,7 @@ export function PropertyDetails() {
                       {property.contact_phone}
                     </a>
                   ) : (
-                    <span className="text-foreground/60">***LOCKED***</span>
+                    <span className="text-muted-foreground">***LOCKED***</span>
                   )}
                 </div>
               </div>
@@ -334,7 +361,7 @@ export function PropertyDetails() {
           {/* Inspection Card */}
           <Card className="p-6">
             <h3 className="font-semibold mb-2">Request Inspection</h3>
-            <p className="text-sm text-foreground/60 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Schedule a physical visit with our verified agent for ₦2,000
             </p>
             <Button
@@ -360,8 +387,8 @@ export function PropertyDetails() {
           {property.uploaded_by_agent_name && (
             <Card className="p-6">
               <h3 className="font-semibold mb-2">Listed By</h3>
-              <p className="text-foreground/60">{property.uploaded_by_agent_name}</p>
-              <p className="text-xs text-foreground/60 mt-1">Verified Agent</p>
+              <p className="text-muted-foreground">{property.uploaded_by_agent_name}</p>
+              <p className="text-xs text-muted-foreground mt-1">Verified Agent</p>
             </Card>
           )}
         </div>
@@ -439,12 +466,7 @@ export function PropertyDetails() {
               className="gap-2"
               data-testid="confirm-inspection-btn"
             >
-              {requestingInspection ? 'Processing...' : (
-                <>
-                  <ExternalLink className="w-4 h-4" />
-                  Pay & Schedule
-                </>
-              )}
+              {requestingInspection ? 'Opening payment...' : 'Pay & Schedule'}
             </Button>
           </DialogFooter>
         </DialogContent>
