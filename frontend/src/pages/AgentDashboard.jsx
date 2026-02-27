@@ -14,14 +14,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-// ── Lightbox Component ──────────────────────────────────────────
+// ── Lightbox ────────────────────────────────────────────────────
 function Lightbox({ images, startIndex, onClose }) {
   const [current, setCurrent] = useState(startIndex);
-
   const prev = () => setCurrent(i => (i - 1 + images.length) % images.length);
   const next = () => setCurrent(i => (i + 1) % images.length);
 
-  // Keyboard navigation
   useEffect(() => {
     const handler = (e) => {
       if (e.key === 'ArrowLeft') prev();
@@ -33,62 +31,31 @@ function Lightbox({ images, startIndex, onClose }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
-      onClick={onClose}
-    >
-      {/* Close button */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors z-10"
-      >
+    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors z-10">
         <X className="w-5 h-5" />
       </button>
-
-      {/* Image counter */}
       {images.length > 1 && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/70 text-sm bg-black/40 px-3 py-1 rounded-full">
           {current + 1} / {images.length}
         </div>
       )}
-
-      {/* Prev button */}
       {images.length > 1 && (
-        <button
-          onClick={(e) => { e.stopPropagation(); prev(); }}
-          className="absolute left-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
-        >
+        <button onClick={(e) => { e.stopPropagation(); prev(); }} className="absolute left-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors">
           <ChevronLeft className="w-6 h-6" />
         </button>
       )}
-
-      {/* Image */}
-      <img
-        src={images[current]}
-        alt={`Property image ${current + 1}`}
-        className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      />
-
-      {/* Next button */}
+      <img src={images[current]} alt={`Property image ${current + 1}`} className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
       {images.length > 1 && (
-        <button
-          onClick={(e) => { e.stopPropagation(); next(); }}
-          className="absolute right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
-        >
+        <button onClick={(e) => { e.stopPropagation(); next(); }} className="absolute right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors">
           <ChevronRight className="w-6 h-6" />
         </button>
       )}
-
-      {/* Thumbnail strip */}
       {images.length > 1 && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
           {images.map((img, i) => (
-            <button
-              key={i}
-              onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
-              className={`w-12 h-12 rounded-md overflow-hidden border-2 transition-all ${i === current ? 'border-white scale-110' : 'border-white/30 opacity-60 hover:opacity-100'}`}
-            >
+            <button key={i} onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
+              className={`w-12 h-12 rounded-md overflow-hidden border-2 transition-all ${i === current ? 'border-white scale-110' : 'border-white/30 opacity-60 hover:opacity-100'}`}>
               <img src={img} alt="" className="w-full h-full object-cover" />
             </button>
           ))}
@@ -110,8 +77,6 @@ export function AgentDashboard() {
   const [showPropertyDialog, setShowPropertyDialog] = useState(false);
   const [editingProperty, setEditingProperty] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-
-  // Lightbox state
   const [lightbox, setLightbox] = useState({ open: false, images: [], index: 0 });
 
   const [formData, setFormData] = useState({
@@ -149,7 +114,6 @@ export function AgentDashboard() {
     const files = Array.from(e.target.files);
     if (!files.length) return;
     if (formData.images.length + files.length > 5) { toast.error('Maximum 5 images allowed'); return; }
-
     setUploadingImage(true);
     try {
       const uploadedUrls = [];
@@ -172,9 +136,7 @@ export function AgentDashboard() {
     }
   };
 
-  const handleRemoveImage = (index) => {
-    setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
-  };
+  const handleRemoveImage = (index) => setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
 
   const resetForm = () => {
     setFormData({ title: '', description: '', price: '', location: '', property_type: 'hostel', images: [], contact_name: '', contact_phone: '' });
@@ -225,116 +187,172 @@ export function AgentDashboard() {
   };
 
   const formatPrice = (price) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(price);
-  const getStatusBadge = (status) => ({ pending: 'bg-yellow-100 text-yellow-800', approved: 'bg-green-100 text-green-800', rejected: 'bg-red-100 text-red-800', assigned: 'bg-blue-100 text-blue-800', completed: 'bg-green-100 text-green-800' }[status] || 'bg-gray-100 text-gray-800');
+  const getStatusBadge = (status) => ({
+    pending: 'bg-yellow-100 text-yellow-800',
+    approved: 'bg-green-100 text-green-800',
+    rejected: 'bg-red-100 text-red-800',
+    assigned: 'bg-blue-100 text-blue-800',
+    completed: 'bg-green-100 text-green-800'
+  }[status] || 'bg-gray-100 text-gray-800');
 
   if (!isAuthenticated || (!isAgent && !isAdmin)) return null;
 
   return (
     <div className="container mx-auto px-4 py-6" data-testid="agent-dashboard">
-      {/* Lightbox */}
       {lightbox.open && <Lightbox images={lightbox.images} startIndex={lightbox.index} onClose={closeLightbox} />}
 
-      <div className="flex items-center justify-between mb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Agent Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Manage your properties and inspections</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Agent Dashboard</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Manage your properties and inspections</p>
         </div>
         <Button onClick={() => handleOpenDialog()} className="gap-2" data-testid="add-property-btn">
-          <Plus className="w-4 h-4" /> Add Property
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Add Property</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <Card className="p-4"><p className="text-2xl font-bold">{properties.length}</p><p className="text-sm text-muted-foreground">Total Properties</p></Card>
         <Card className="p-4"><p className="text-2xl font-bold text-green-600">{properties.filter(p => p.status === 'approved').length}</p><p className="text-sm text-muted-foreground">Approved</p></Card>
         <Card className="p-4"><p className="text-2xl font-bold text-yellow-600">{properties.filter(p => p.status === 'pending').length}</p><p className="text-sm text-muted-foreground">Pending</p></Card>
         <Card className="p-4"><p className="text-2xl font-bold">{inspections.length}</p><p className="text-sm text-muted-foreground">Inspections</p></Card>
       </div>
 
+      {/* Tabs */}
       <Tabs defaultValue="properties">
-        <TabsList className="mb-6">
+        <TabsList className="mb-5">
           <TabsTrigger value="properties" className="gap-2"><Building2 className="w-4 h-4" /> My Properties</TabsTrigger>
           <TabsTrigger value="inspections" className="gap-2"><Calendar className="w-4 h-4" /> Assigned Inspections</TabsTrigger>
         </TabsList>
 
+        {/* Properties Tab */}
         <TabsContent value="properties">
-          {loading
-            ? <div className="space-y-4">{[1,2,3].map(i => <Card key={i} className="p-4 animate-pulse"><div className="h-24 bg-muted rounded" /></Card>)}</div>
-            : properties.length > 0 ? (
-              <div className="space-y-4">
-                {properties.map((property) => (
-                  <Card key={property.id} className="p-4">
-                    <div className="flex gap-4">
-                      {/* Property thumbnail with view button */}
-                      <div className="relative group w-32 h-24 flex-shrink-0">
-                        {property.images?.[0] ? (
-                          <>
-                            <img
-                              src={property.images[0]}
-                              alt=""
-                              className="w-full h-full rounded-lg object-cover cursor-pointer"
-                              onClick={() => openLightbox(property.images, 0)}
-                            />
-                            <button
-                              onClick={() => openLightbox(property.images, 0)}
-                              className="absolute bottom-1 right-1 bg-black/60 hover:bg-black/80 text-white text-xs px-2 py-0.5 rounded-md flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Expand className="w-3 h-3" />
-                              View
-                            </button>
-                            {property.images.length > 1 && (
-                              <span className="absolute top-1 right-1 bg-black/60 text-white text-xs px-1.5 rounded-md">
-                                +{property.images.length - 1}
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
-                            <Image className="w-8 h-8 text-muted-foreground" />
+          {loading ? (
+            <div className="space-y-3">
+              {[1,2,3].map(i => (
+                <Card key={i} className="overflow-hidden">
+                  <div className="flex" style={{ height: '110px' }}>
+                    <div className="w-28 bg-muted animate-pulse flex-shrink-0" />
+                    <div className="flex-1 p-3 space-y-2">
+                      <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                      <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+                      <div className="h-4 bg-muted rounded animate-pulse w-1/3" />
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : properties.length > 0 ? (
+            <div className="space-y-3">
+              {properties.map((property) => (
+                <Card key={property.id} className="overflow-hidden">
+                  <div className="flex">
+
+                    {/* Left: image — fixed width, fills height naturally */}
+                    <div className="relative group flex-shrink-0 w-28 sm:w-32" style={{ minHeight: '110px' }}>
+                      {property.images?.[0] ? (
+                        <>
+                          <img
+                            src={property.images[0]}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover cursor-pointer"
+                            onClick={() => openLightbox(property.images, 0)}
+                          />
+                          {/* Hover overlay */}
+                          <div
+                            className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-end justify-center pb-2 transition-all cursor-pointer"
+                            onClick={() => openLightbox(property.images, 0)}
+                          >
+                            <span className="text-white text-xs font-medium bg-black/60 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                              <Expand className="w-3 h-3" /> View
+                            </span>
                           </div>
-                        )}
+                          {/* Extra images count */}
+                          {property.images.length > 1 && (
+                            <span className="absolute top-2 left-2 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded font-medium pointer-events-none">
+                              +{property.images.length - 1}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <div className="absolute inset-0 bg-muted flex items-center justify-center">
+                          <Image className="w-7 h-7 text-muted-foreground/40" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: content — 3-row flex column */}
+                    <div className="flex-1 p-3 min-w-0 flex flex-col justify-between" style={{ minHeight: '110px' }}>
+
+                      {/* Row 1: title + status badge */}
+                      <div className="flex items-start gap-2">
+                        <h3 className="font-semibold text-sm leading-snug line-clamp-2 flex-1 min-w-0">
+                          {property.title}
+                        </h3>
+                        <Badge className={`${getStatusBadge(property.status)} text-xs capitalize shrink-0 whitespace-nowrap`}>
+                          {property.status}
+                        </Badge>
                       </div>
 
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h3 className="font-semibold">{property.title}</h3>
-                            <p className="text-sm text-muted-foreground">{property.location}</p>
-                            <p className="text-primary font-bold mt-1">{formatPrice(property.price)}/year</p>
-                          </div>
-                          <Badge className={getStatusBadge(property.status)}>{property.status}</Badge>
-                        </div>
+                      {/* Row 2: location */}
+                      <p className="text-xs text-muted-foreground line-clamp-1">
+                        {property.location}
+                      </p>
+
+                      {/* Row 3: price + edit button — always on same line, never wraps */}
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-primary font-bold text-sm truncate">
+                          {formatPrice(property.price)}
+                          <span className="text-xs font-normal text-muted-foreground">/yr</span>
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenDialog(property)}
+                          className="h-7 px-2.5 text-xs gap-1 shrink-0"
+                        >
+                          <Edit className="w-3 h-3" /> Edit
+                        </Button>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => handleOpenDialog(property)}><Edit className="w-4 h-4" /></Button>
+
                     </div>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card className="p-8 text-center">
-                <Building2 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="font-semibold">No Properties Yet</h3>
-                <Button onClick={() => handleOpenDialog()} className="mt-4">Add Property</Button>
-              </Card>
-            )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="p-10 text-center">
+              <Building2 className="w-12 h-12 mx-auto text-muted-foreground/40 mb-4" />
+              <h3 className="font-semibold">No Properties Yet</h3>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">Add your first property listing to get started</p>
+              <Button onClick={() => handleOpenDialog()} className="gap-2">
+                <Plus className="w-4 h-4" /> Add Property
+              </Button>
+            </Card>
+          )}
         </TabsContent>
 
+        {/* Inspections Tab */}
         <TabsContent value="inspections">
           {inspections.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {inspections.map((inspection) => (
                 <Card key={inspection.id} className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold">{inspection.property_title}</h3>
-                      <p className="text-sm text-muted-foreground">Requested by: {inspection.user_name}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold line-clamp-1">{inspection.property_title}</h3>
+                      <p className="text-sm text-muted-foreground mt-0.5">By: {inspection.user_name}</p>
                       <p className="text-sm text-muted-foreground">Date: {inspection.inspection_date}</p>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
+                    <div className="flex flex-col items-end gap-2 shrink-0">
                       <Badge className={getStatusBadge(inspection.status)}>{inspection.status}</Badge>
                       {inspection.status !== 'completed' && inspection.payment_status === 'completed' && (
-                        <Button size="sm" onClick={() => handleMarkCompleted(inspection.id)} className="gap-2">
-                          <CheckCircle2 className="w-4 h-4" /> Mark Complete
+                        <Button size="sm" onClick={() => handleMarkCompleted(inspection.id)} className="gap-1.5 h-7 text-xs">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Complete
                         </Button>
                       )}
                     </div>
@@ -343,15 +361,16 @@ export function AgentDashboard() {
               ))}
             </div>
           ) : (
-            <Card className="p-8 text-center">
-              <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <Card className="p-10 text-center">
+              <Calendar className="w-12 h-12 mx-auto text-muted-foreground/40 mb-4" />
               <h3 className="font-semibold">No Inspections Assigned</h3>
+              <p className="text-sm text-muted-foreground mt-1">Inspections assigned to you will appear here</p>
             </Card>
           )}
         </TabsContent>
       </Tabs>
 
-      {/* Property Dialog */}
+      {/* Add/Edit Property Dialog */}
       <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -383,7 +402,7 @@ export function AgentDashboard() {
 
             {/* Image Upload */}
             <div className="space-y-3">
-              <Label>Property Images <span className="text-muted-foreground text-xs">(max 5, up to 5MB each)</span></Label>
+              <Label>Property Images <span className="text-muted-foreground text-xs font-normal">(max 5, up to 5MB each)</span></Label>
               <div
                 onClick={() => !uploadingImage && fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
@@ -404,46 +423,25 @@ export function AgentDashboard() {
                 )}
               </div>
 
-              {/* Image grid with view button */}
               {formData.images.length > 0 && (
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                   {formData.images.map((img, index) => (
                     <div key={index} className="relative group aspect-square">
-                      <img
-                        src={img}
-                        alt={`Property ${index + 1}`}
-                        className="w-full h-full rounded-lg object-cover cursor-pointer"
-                        onClick={() => openLightbox(formData.images, index)}
-                      />
-                      {/* View button — bottom right */}
-                      <button
-                        type="button"
-                        onClick={() => openLightbox(formData.images, index)}
-                        className="absolute bottom-1 right-1 bg-black/60 hover:bg-black/80 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Expand className="w-3 h-3" />
-                        View
+                      <img src={img} alt={`Property ${index + 1}`} className="w-full h-full rounded-lg object-cover cursor-pointer" onClick={() => openLightbox(formData.images, index)} />
+                      <button type="button" onClick={() => openLightbox(formData.images, index)}
+                        className="absolute bottom-1 right-1 bg-black/60 hover:bg-black/80 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Expand className="w-3 h-3" /> View
                       </button>
-                      {/* Remove button — top right */}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImage(index)}
-                        className="absolute top-1 right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                      >
+                      <button type="button" onClick={() => handleRemoveImage(index)}
+                        className="absolute top-1 right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
                         <XCircle className="w-3.5 h-3.5" />
                       </button>
-                      {/* Cover badge */}
-                      {index === 0 && (
-                        <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1 rounded pointer-events-none">Cover</span>
-                      )}
+                      {index === 0 && <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1 rounded pointer-events-none">Cover</span>}
                     </div>
                   ))}
-                  {/* Add more slot */}
                   {formData.images.length < 5 && (
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center cursor-pointer hover:border-primary hover:bg-muted/30 transition-colors"
-                    >
+                    <div onClick={() => fileInputRef.current?.click()}
+                      className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center cursor-pointer hover:border-primary hover:bg-muted/30 transition-colors">
                       <Plus className="w-6 h-6 text-muted-foreground" />
                     </div>
                   )}
@@ -454,9 +452,7 @@ export function AgentDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowPropertyDialog(false); resetForm(); }}>Cancel</Button>
             <Button onClick={handleSubmitProperty} disabled={uploadingImage}>
-              {uploadingImage
-                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading...</>
-                : <>{editingProperty ? 'Update' : 'Create'} Property</>}
+              {uploadingImage ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading...</> : <>{editingProperty ? 'Update' : 'Create'} Property</>}
             </Button>
           </DialogFooter>
         </DialogContent>
