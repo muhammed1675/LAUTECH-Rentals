@@ -116,14 +116,14 @@ export function BuyTokens() {
             <Coins className="w-8 h-8 text-primary" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Buy Tokens</h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-foreground/60 mt-2">
             Use tokens to unlock property owner contacts
           </p>
         </div>
 
         {/* Current Balance */}
         <Card className="p-6 mb-6 text-center bg-primary/5">
-          <p className="text-sm text-muted-foreground">Current Balance</p>
+          <p className="text-sm text-foreground/60">Current Balance</p>
           <p className="text-4xl font-bold text-primary mt-1">
             {user?.token_balance || wallet?.token_balance || 0} <span className="text-lg">tokens</span>
           </p>
@@ -185,11 +185,11 @@ export function BuyTokens() {
             {/* Price Display */}
             <Card className="p-4 bg-muted/50">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-muted-foreground">Price per token</span>
+                <span className="text-foreground/60">Price per token</span>
                 <span>₦1,000</span>
               </div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-muted-foreground">Quantity</span>
+                <span className="text-foreground/60">Quantity</span>
                 <span>{quantity}</span>
               </div>
               <div className="border-t pt-2 mt-2 flex justify-between items-center">
@@ -265,7 +265,7 @@ export function BuyTokens() {
         </Card>
 
         {/* Info */}
-        <div className="mt-6 text-center text-sm text-muted-foreground">
+        <div className="mt-6 text-center text-sm text-foreground/60">
           <p>Tokens are non-refundable and can only be used to unlock property contacts.</p>
           <p className="mt-1">1 token = 1 property contact unlock</p>
         </div>
