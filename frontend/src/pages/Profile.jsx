@@ -97,7 +97,7 @@ export function Profile() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
-        <p className="text-muted-foreground mt-1">Manage your account and view your activity</p>
+        <p className="text-foreground/60 mt-1">Manage your account and view your activity</p>
       </div>
 
       {/* User Info & Wallet */}
@@ -110,7 +110,7 @@ export function Profile() {
             </div>
             <div>
               <h2 className="font-semibold text-lg">{user?.full_name}</h2>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <p className="text-sm text-foreground/60">{user?.email}</p>
               <Badge variant="outline" className="mt-2 capitalize">
                 {user?.role}
               </Badge>
@@ -122,7 +122,7 @@ export function Profile() {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Token Balance</p>
+              <p className="text-sm text-foreground/60">Token Balance</p>
               <p className="text-4xl font-bold text-primary mt-1">
                 {user?.token_balance || wallet?.token_balance || 0}
               </p>
@@ -144,11 +144,11 @@ export function Profile() {
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
               <p className="text-2xl font-bold">{unlocks.length}</p>
-              <p className="text-xs text-muted-foreground">Unlocked</p>
+              <p className="text-xs text-foreground/60">Unlocked</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold">{inspections.length}</p>
-              <p className="text-xs text-muted-foreground">Inspections</p>
+              <p className="text-xs text-foreground/60">Inspections</p>
             </div>
           </div>
           
@@ -216,12 +216,12 @@ export function Profile() {
                     />
                     <div className="flex-1">
                       <h3 className="font-semibold">{unlock.property?.title}</h3>
-                      <p className="text-sm text-muted-foreground">{unlock.property?.location}</p>
+                      <p className="text-sm text-foreground/60">{unlock.property?.location}</p>
                       <div className="flex items-center gap-4 mt-2">
                         <span className="text-primary font-bold">
                           {formatPrice(unlock.property?.price || 0)}
                         </span>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-sm text-foreground/60">
                           Contact: {unlock.property?.contact_phone}
                         </span>
                       </div>
@@ -237,9 +237,9 @@ export function Profile() {
             </div>
           ) : (
             <Card className="p-8 text-center">
-              <Unlock className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <Unlock className="w-12 h-12 mx-auto text-foreground/60 mb-4" />
               <h3 className="font-semibold">No Unlocked Properties</h3>
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-sm text-foreground/60 mt-2">
                 Properties you unlock will appear here
               </p>
               <Link to="/browse">
@@ -266,10 +266,10 @@ export function Profile() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-semibold">{inspection.property_title}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
+                      <p className="text-sm text-foreground/60 mt-1">
                         Scheduled: {inspection.inspection_date}
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-foreground/60">
                         Agent: {inspection.agent_name || 'To be assigned'}
                       </p>
                     </div>
@@ -287,9 +287,9 @@ export function Profile() {
             </div>
           ) : (
             <Card className="p-8 text-center">
-              <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <Calendar className="w-12 h-12 mx-auto text-foreground/60 mb-4" />
               <h3 className="font-semibold">No Inspections</h3>
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-sm text-foreground/60 mt-2">
                 Request inspections from property detail pages
               </p>
             </Card>
@@ -308,7 +308,7 @@ export function Profile() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium">{tx.tokens_added} Tokens</p>
-                          <p className="text-sm text-muted-foreground">{tx.reference}</p>
+                          <p className="text-sm text-foreground/60">{tx.reference}</p>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-primary">{formatPrice(tx.amount)}</p>
@@ -319,7 +319,7 @@ export function Profile() {
                   ))}
                 </div>
               ) : (
-                <Card className="p-4 text-center text-muted-foreground">
+                <Card className="p-4 text-center text-foreground/60">
                   No token purchases yet
                 </Card>
               )}
@@ -334,7 +334,7 @@ export function Profile() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium">Inspection Fee</p>
-                          <p className="text-sm text-muted-foreground">{tx.reference}</p>
+                          <p className="text-sm text-foreground/60">{tx.reference}</p>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-primary">{formatPrice(tx.amount)}</p>
@@ -345,7 +345,7 @@ export function Profile() {
                   ))}
                 </div>
               ) : (
-                <Card className="p-4 text-center text-muted-foreground">
+                <Card className="p-4 text-center text-foreground/60">
                   No inspection payments yet
                 </Card>
               )}
@@ -359,19 +359,19 @@ export function Profile() {
             <h3 className="font-semibold mb-4">Account Settings</h3>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-muted-foreground">Full Name</p>
+                <p className="text-sm text-foreground/60">Full Name</p>
                 <p className="font-medium">{user?.full_name}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Email</p>
+                <p className="text-sm text-foreground/60">Email</p>
                 <p className="font-medium">{user?.email}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Role</p>
+                <p className="text-sm text-foreground/60">Role</p>
                 <p className="font-medium capitalize">{user?.role}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Account Status</p>
+                <p className="text-sm text-foreground/60">Account Status</p>
                 <Badge variant={user?.suspended ? 'destructive' : 'outline'}>
                   {user?.suspended ? 'Suspended' : 'Active'}
                 </Badge>
