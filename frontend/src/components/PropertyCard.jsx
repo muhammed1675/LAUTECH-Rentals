@@ -6,19 +6,16 @@ import { Card } from './ui/card';
 export function PropertyCard({ property }) {
   const formatPrice = (price) => {
     return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      style: 'currency', currency: 'NGN',
+      minimumFractionDigits: 0, maximumFractionDigits: 0,
     }).format(price);
   };
 
-  const typeIcon = property.property_type === 'hostel' ? Home : Building;
-  const TypeIcon = typeIcon;
+  const TypeIcon = property.property_type === 'hostel' ? Home : Building;
 
   return (
     <Link to={`/property/${property.id}`} data-testid={`property-card-${property.id}`}>
-      <Card className="group overflow-hidden border-border/50 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+      <Card className="group overflow-hidden border border-border/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white">
         {/* Image */}
         <div className="relative aspect-[4/3] overflow-hidden">
           <img
@@ -28,16 +25,16 @@ export function PropertyCard({ property }) {
             loading="lazy"
           />
           {/* Type Badge */}
-          <Badge 
-            variant="secondary" 
-            className="absolute top-3 left-3 gap-1 bg-background/90 backdrop-blur-sm"
+          <Badge
+            variant="secondary"
+            className="absolute top-3 left-3 gap-1 bg-white/95 text-foreground border border-border/40 shadow-sm font-medium"
           >
             <TypeIcon className="w-3 h-3" />
             {property.property_type}
           </Badge>
           {/* Price Overlay */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 pt-8">
-            <p className="text-2xl font-bold text-white tracking-tight">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/75 to-transparent p-4 pt-10">
+            <p className="text-xl font-bold text-white tracking-tight drop-shadow">
               {formatPrice(property.price)}
               <span className="text-sm font-normal text-white/80">/year</span>
             </p>
@@ -46,16 +43,18 @@ export function PropertyCard({ property }) {
 
         {/* Content */}
         <div className="p-4">
-          <h3 className="font-semibold text-lg line-clamp-1 group-hover:text-primary transition-colors">
+          <h3 className="font-semibold text-base line-clamp-1 text-foreground group-hover:text-primary transition-colors">
             {property.title}
           </h3>
-          <div className="flex items-center gap-1 mt-2 text-muted-foreground">
-            <MapPin className="w-4 h-4 shrink-0" />
+          <div className="flex items-center gap-1 mt-1.5 text-foreground/55">
+            <MapPin className="w-3.5 h-3.5 shrink-0" />
             <span className="text-sm line-clamp-1">{property.location}</span>
           </div>
-          <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-            {property.description}
-          </p>
+          {property.description && (
+            <p className="text-sm text-foreground/55 mt-2 line-clamp-2 leading-relaxed">
+              {property.description}
+            </p>
+          )}
         </div>
       </Card>
     </Link>
@@ -64,10 +63,10 @@ export function PropertyCard({ property }) {
 
 export function PropertyCardSkeleton() {
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden border border-border/50">
       <div className="aspect-[4/3] bg-muted animate-pulse" />
       <div className="p-4 space-y-3">
-        <div className="h-6 bg-muted rounded animate-pulse" />
+        <div className="h-5 bg-muted rounded animate-pulse" />
         <div className="h-4 bg-muted rounded w-2/3 animate-pulse" />
         <div className="h-4 bg-muted rounded animate-pulse" />
       </div>
