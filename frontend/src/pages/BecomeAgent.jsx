@@ -63,7 +63,7 @@ export function BecomeAgent() {
               <CheckCircle2 className="w-8 h-8 text-green-600" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Request Submitted!</h1>
-            <p className="text-muted-foreground mb-6">
+            <p className="text-foreground/60 mb-6">
               Your agent verification request has been submitted. Our admin team will review your documents and get back to you soon.
             </p>
             <Button onClick={() => navigate('/profile')}>
@@ -92,7 +92,7 @@ export function BecomeAgent() {
             <Shield className="w-8 h-8 text-primary" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Become an Agent</h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-foreground/60 mt-2">
             Submit your verification documents to become a property agent
           </p>
         </div>
@@ -107,7 +107,7 @@ export function BecomeAgent() {
                 placeholder="https://example.com/id-card.jpg"
                 data-testid="id-card-url"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-foreground/60">
                 Upload your ID card image to a service like Imgur and paste the URL here
               </p>
               {idCardUrl && (
@@ -127,7 +127,7 @@ export function BecomeAgent() {
                 placeholder="https://example.com/selfie.jpg"
                 data-testid="selfie-url"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-foreground/60">
                 A clear selfie holding your ID card
               </p>
               {selfieUrl && (
@@ -161,7 +161,7 @@ export function BecomeAgent() {
           </form>
         </Card>
 
-        <div className="mt-6 text-center text-sm text-muted-foreground">
+        <div className="mt-6 text-center text-sm text-foreground/60">
           <p>Once approved, you'll be able to list properties and manage inspections.</p>
         </div>
       </div>
