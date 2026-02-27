@@ -3,6 +3,41 @@ import { supabase } from './supabase';
 
 const AuthContext = createContext(null);
 
+// ── Clean error message helper ──────────────────────────────────
+const parseAuthError = (error) => {
+  if (!error) return 'Something went wrong. Please try again.';
+  
+  const msg = (error.message || error.toString()).toLowerCase();
+
+  // Body stream / fetch / network errors — the main bug being fixed
+  if (msg.includes('body stream') || msg.includes('json') || msg.includes('already read'))
+    return 'Wrong email or password. Please try again.';
+  if (msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch'))
+    return 'Network error. Please check your connection and try again.';
+
+  // Auth errors
+  if (msg.includes('invalid login credentials') || msg.includes('invalid email or password'))
+    return 'Wrong email or password. Please try again.';
+  if (msg.includes('user not found') || msg.includes('no user found'))
+    return 'No account found with this email. Please register first.';
+  if (msg.includes('email not confirmed'))
+    return 'Please confirm your email first. Check your inbox.';
+  if (msg.includes('email already') || msg.includes('already registered'))
+    return 'An account with this email already exists. Please login instead.';
+  if (msg.includes('password') && msg.includes('short'))
+    return 'Password must be at least 6 characters.';
+  if (msg.includes('too many requests') || msg.includes('rate limit'))
+    return 'Too many attempts. Please wait a moment and try again.';
+  if (msg.includes('signup is disabled'))
+    return 'New registrations are currently disabled. Contact support.';
+
+  // Return the original message if it's clean enough, else generic
+  if (error.message && error.message.length < 100 && !error.message.includes('fetch'))
+    return error.message;
+
+  return 'Something went wrong. Please try again.';
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
@@ -13,7 +48,6 @@ export function AuthProvider({ children }) {
 
     for (let i = 0; i < retries; i++) {
       try {
-        // Wait a bit more on each retry
         if (i > 0) await new Promise(r => setTimeout(r, 1000 * i));
 
         const { data, error } = await supabase
@@ -42,10 +76,9 @@ export function AuthProvider({ children }) {
 
         if (error) {
           console.warn(`Profile load attempt ${i + 1} failed:`, error.message);
-          continue; // retry
+          continue;
         }
 
-        // Success — get wallet too
         const { data: wallet } = await supabase
           .from('wallets')
           .select('token_balance')
@@ -84,26 +117,31 @@ export function AuthProvider({ children }) {
     return () => { mounted = false; subscription.unsubscribe(); };
   }, [loadUserProfile]);
 
+  // ── Login ────────────────────────────────────────────────────
   const login = async (email, password) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      let data, error;
 
-      if (error) {
-        if (error.message?.toLowerCase().includes('email not confirmed'))
-          throw new Error('Please confirm your email first. Check your inbox.');
-        if (error.message?.toLowerCase().includes('invalid login credentials'))
-          throw new Error('Wrong email or password. Please try again.');
-        throw error;
+      try {
+        const result = await supabase.auth.signInWithPassword({ email, password });
+        data = result.data;
+        error = result.error;
+      } catch (fetchErr) {
+        // Wrap raw fetch/stream errors
+        throw new Error(parseAuthError(fetchErr));
       }
 
-      // Give Supabase a moment to fully establish the session
+      if (error) {
+        throw new Error(parseAuthError(error));
+      }
+
       await new Promise(r => setTimeout(r, 800));
 
       const profile = await loadUserProfile(data.user);
 
       if (!profile) {
-        // Last resort — check if user row exists via email
+        // Fallback: try email lookup
         const { data: found } = await supabase
           .from('users')
           .select('*')
@@ -133,26 +171,37 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // ── Register ─────────────────────────────────────────────────
   const register = async (email, password, fullName) => {
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { full_name: fullName } }
-    });
-    if (error) throw error;
-    if (!data.session) return { requiresConfirmation: true };
-    await new Promise(r => setTimeout(r, 1000));
-    const profile = await loadUserProfile(data.user);
-    setUser(profile);
-    setSession(data.session);
-    return profile;
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email, password,
+        options: { data: { full_name: fullName } }
+      });
+
+      if (error) throw new Error(parseAuthError(error));
+      if (!data.session) return { requiresConfirmation: true };
+
+      await new Promise(r => setTimeout(r, 1000));
+      const profile = await loadUserProfile(data.user);
+      setUser(profile);
+      setSession(data.session);
+      return profile;
+    } catch (err) {
+      // Re-throw with clean message if not already cleaned
+      if (err.message && err.message.length < 120) throw err;
+      throw new Error(parseAuthError(err));
+    }
   };
 
+  // ── Logout ───────────────────────────────────────────────────
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
   };
 
+  // ── Refresh user ─────────────────────────────────────────────
   const refreshUser = async () => {
     const { data: { session: s } } = await supabase.auth.getSession();
     if (s?.user) {
