@@ -608,6 +608,7 @@ export const adminAPI = {
       { count: pendingInspections },
       { count: completedInspections },
       { count: pendingVerifications },
+      { count: unreadMessages },
       { data: tokenTxs },
       { data: inspTxs }
     ] = await Promise.all([
@@ -620,6 +621,7 @@ export const adminAPI = {
       supabase.from('inspections').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('inspections').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
       supabase.from('agent_verification_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('contact_messages').select('*', { count: 'exact', head: true }).eq('status', 'unread'),
       supabase.from('transactions').select('amount').eq('status', 'completed'),
       supabase.from('inspection_transactions').select('amount').eq('status', 'completed')
     ]);
@@ -638,6 +640,7 @@ export const adminAPI = {
         pending_inspections: pendingInspections || 0,
         completed_inspections: completedInspections || 0,
         pending_verifications: pendingVerifications || 0,
+        unread_messages: unreadMessages || 0,
         token_revenue: tokenRevenue,
         inspection_revenue: inspectionRevenue,
         total_revenue: tokenRevenue + inspectionRevenue
@@ -708,6 +711,52 @@ export const paymentAPI = {
   }
 };
 
+
+// ============== CONTACT APIs ==============
+
+export const contactAPI = {
+  submit: async (data) => {
+    const { error } = await supabase
+      .from('contact_messages')
+      .insert({
+        name: data.name,
+        email: data.email,
+        subject: data.subject,
+        message: data.message,
+        status: 'unread',
+      });
+    if (error) throw error;
+    return { data: { message: 'Message submitted' } };
+  },
+
+  getAll: async () => {
+    const { data, error } = await supabase
+      .from('contact_messages')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { data };
+  },
+
+  markRead: async (id) => {
+    const { error } = await supabase
+      .from('contact_messages')
+      .update({ status: 'read' })
+      .eq('id', id);
+    if (error) throw error;
+    return { data: { message: 'Marked as read' } };
+  },
+
+  delete: async (id) => {
+    const { error } = await supabase
+      .from('contact_messages')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return { data: { message: 'Message deleted' } };
+  },
+};
+
 // ============== STORAGE APIs ==============
 
 export const storageAPI = {
@@ -731,6 +780,7 @@ export const storageAPI = {
 
 export default {
   propertyAPI,
+  contactAPI,
   walletAPI,
   tokenAPI,
   unlockAPI,
