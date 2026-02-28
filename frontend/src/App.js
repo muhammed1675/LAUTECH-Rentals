@@ -17,6 +17,7 @@ import AgentDashboard from "./pages/AgentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import BecomeAgent from "./pages/BecomeAgent";
 import PaymentCallback from "./pages/PaymentCallback";
+import { Contact } from './pages/Contact';
 
 // Protected Route wrapper
 function ProtectedRoute({ children, allowedRoles = [] }) {
@@ -52,6 +53,7 @@ function AppRoutes() {
       <Route path="/register" element={<Layout><Register /></Layout>} />
       <Route path="/reset-password" element={<Layout><ResetPassword /></Layout>} />
       <Route path="/payment/callback" element={<Layout><PaymentCallback /></Layout>} />
+      <Route path="/contact" element={<Contact />} />
 
       {/* Protected Routes - Any authenticated user */}
       <Route
