@@ -11,9 +11,10 @@ const generateReference = (prefix) => {
 
 export const propertyAPI = {
   getAll: async (params = {}) => {
+    // Join with users to filter out properties from suspended agents
     let query = supabase
       .from('properties')
-      .select('*')
+      .select('*, agent:users!uploaded_by_agent_id(suspended)')
       .order('created_at', { ascending: false });
     
     if (params.status) {
@@ -36,22 +37,34 @@ export const propertyAPI = {
     
     const { data, error } = await query;
     if (error) throw error;
-    return { data };
+    
+    // Filter out properties from suspended agents, then strip the agent join field
+    const filtered = (data || [])
+      .filter(p => !p.agent?.suspended)
+      .map(({ agent, ...rest }) => rest);
+    
+    return { data: filtered };
   },
 
   getPublic: async (id) => {
     const { data, error } = await supabase
       .from('properties')
-      .select('*')
+      .select('*, agent:users!uploaded_by_agent_id(suspended)')
       .eq('id', id)
       .eq('status', 'approved')
       .single();
     
     if (error) throw error;
     
+    // Block access if agent is suspended
+    if (data?.agent?.suspended) {
+      throw new Error('This property is no longer available');
+    }
+    
+    const { agent, ...property } = data;
     return {
       data: {
-        ...data,
+        ...property,
         contact_phone: '***LOCKED***',
         contact_unlocked: false
       }
@@ -59,13 +72,20 @@ export const propertyAPI = {
   },
 
   getById: async (id, userId) => {
-    const { data: property, error } = await supabase
+    const { data: propertyRaw, error } = await supabase
       .from('properties')
-      .select('*')
+      .select('*, agent:users!uploaded_by_agent_id(suspended)')
       .eq('id', id)
       .single();
     
     if (error) throw error;
+    
+    // Block access if agent is suspended
+    if (propertyRaw?.agent?.suspended) {
+      throw new Error('This property is no longer available');
+    }
+    
+    const { agent, ...property } = propertyRaw;
     
     // Check if user has unlocked
     const { data: unlock } = await supabase
