@@ -207,12 +207,33 @@ export function AgentDashboard() {
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Agent Dashboard</h1>
           <p className="text-muted-foreground mt-1 text-sm">Manage your properties and inspections</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="gap-2" data-testid="add-property-btn">
+        <Button
+          onClick={() => {
+            if (user?.suspended) { toast.error('Your account is suspended. You cannot add properties.'); return; }
+            handleOpenDialog();
+          }}
+          className="gap-2"
+          disabled={user?.suspended}
+          data-testid="add-property-btn"
+        >
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">Add Property</span>
           <span className="sm:hidden">Add</span>
         </Button>
       </div>
+
+      {/* Suspended Banner */}
+      {user?.suspended && (
+        <div className="mb-5 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
+          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
+            <XCircle className="w-4 h-4 text-red-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-red-800 text-sm">Account Suspended</p>
+            <p className="text-xs text-red-600 mt-0.5">Your account has been suspended by an admin. You cannot add or edit properties until your account is reinstated. Please contact support for more information.</p>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -312,7 +333,11 @@ export function AgentDashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleOpenDialog(property)}
+                          onClick={() => {
+                            if (user?.suspended) { toast.error('Your account is suspended. You cannot edit properties.'); return; }
+                            handleOpenDialog(property);
+                          }}
+                          disabled={user?.suspended}
                           className="h-7 px-2.5 text-xs gap-1 shrink-0"
                         >
                           <Edit className="w-3 h-3" /> Edit
@@ -329,7 +354,7 @@ export function AgentDashboard() {
               <Building2 className="w-12 h-12 mx-auto text-muted-foreground/40 mb-4" />
               <h3 className="font-semibold">No Properties Yet</h3>
               <p className="text-sm text-muted-foreground mt-1 mb-4">Add your first property listing to get started</p>
-              <Button onClick={() => handleOpenDialog()} className="gap-2">
+              <Button onClick={() => { if (user?.suspended) { toast.error('Your account is suspended.'); return; } handleOpenDialog(); }} disabled={user?.suspended} className="gap-2">
                 <Plus className="w-4 h-4" /> Add Property
               </Button>
             </Card>
