@@ -104,7 +104,7 @@ export function Home() {
               Why Choose Rentora?
             </h2>
             <p className="text-foreground/60 mt-3 max-w-2xl mx-auto text-base">
-              We've built a platform designed specifically for LAUTECH students,
+              We've built a platform designed specifically for students near LAUTECH,
               with features that make finding accommodation safe and easy.
             </p>
           </div>
@@ -169,7 +169,7 @@ export function Home() {
                 Ready to Find Your New Home?
               </h2>
               <p className="mt-4 text-white/80 text-base leading-relaxed">
-                Join thousands of LAUTECH students who have found their perfect accommodation through our platform.
+                Join thousands of students who have found their perfect accommodation through our platform.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 mt-8">
                 <Link to="/browse">
