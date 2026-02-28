@@ -114,7 +114,7 @@ export function Contact() {
               <div>
                 <p className="font-semibold text-sm">Call Us</p>
                 <p className="text-xs text-foreground/55 mt-1">Mon – Fri, 9am – 5pm</p>
-                <p className="text-sm text-primary mt-1 font-medium">+234 800 000 0000</p>
+                <p className="text-sm text-primary mt-1 font-medium">+234 913 113 3832</p>
               </div>
             </div>
           </Card>
