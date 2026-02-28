@@ -112,7 +112,7 @@ export function Contact() {
               <div>
                 <p className="font-semibold text-sm">Email Us</p>
                 <p className="text-xs text-foreground/55 mt-1">We reply within 24 hours</p>
-                <p className="text-sm text-primary mt-1 font-medium">support@lautechrentals.com</p>
+                <p className="text-sm text-primary mt-1 font-medium">support@rentora.com</p>
               </div>
             </div>
           </Card>
