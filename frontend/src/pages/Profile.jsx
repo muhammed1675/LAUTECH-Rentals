@@ -383,29 +383,91 @@ export function Profile() {
 
         {/* Settings */}
         <TabsContent value="settings">
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4">Account Settings</h3>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Full Name</p>
-                <p className="font-medium">{user?.full_name}</p>
+          <div className="space-y-6 max-w-xl">
+            {/* Account Info */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4">Account Information</h3>
+              <div className="space-y-4">
+                <div><p className="text-sm text-muted-foreground">Full Name</p><p className="font-medium">{user?.full_name}</p></div>
+                <div><p className="text-sm text-muted-foreground">Email</p><p className="font-medium">{user?.email}</p></div>
+                <div><p className="text-sm text-muted-foreground">Role</p><p className="font-medium capitalize">{user?.role}</p></div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Account Status</p>
+                  <Badge variant={user?.suspended ? 'destructive' : 'outline'}>{user?.suspended ? 'Suspended' : 'Active'}</Badge>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p className="font-medium">{user?.email}</p>
+            </Card>
+
+            {/* Change Password */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between gap-3 mb-5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <KeyRound className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Change Password</h3>
+                    <p className="text-xs text-foreground/55">Update your account password</p>
+                  </div>
+                </div>
+                <Link to="/reset-password" className="text-xs text-primary hover:underline shrink-0">
+                  Forgot password?
+                </Link>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Role</p>
-                <p className="font-medium capitalize">{user?.role}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Account Status</p>
-                <Badge variant={user?.suspended ? 'destructive' : 'outline'}>
-                  {user?.suspended ? 'Suspended' : 'Active'}
-                </Badge>
-              </div>
-            </div>
-          </Card>
+
+              {pwSuccess ? (
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 border border-green-200">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                  <p className="text-sm text-green-800 font-medium">Password changed successfully!</p>
+                </div>
+              ) : (
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="current-pw">Current Password</Label>
+                    <div className="relative">
+                      <Input id="current-pw" type={showPw.current ? 'text' : 'password'} value={pwForm.current}
+                        onChange={(e) => setPwForm(p => ({ ...p, current: e.target.value }))}
+                        placeholder="Enter current password" className="pr-10" />
+                      <button type="button" onClick={() => toggleShow('current')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showPw.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-pw">New Password</Label>
+                    <div className="relative">
+                      <Input id="new-pw" type={showPw.newPw ? 'text' : 'password'} value={pwForm.newPw}
+                        onChange={(e) => setPwForm(p => ({ ...p, newPw: e.target.value }))}
+                        placeholder="Min. 6 characters" className="pr-10" />
+                      <button type="button" onClick={() => toggleShow('newPw')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showPw.newPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {pwForm.newPw && pwForm.newPw.length < 6 && <p className="text-xs text-destructive">At least 6 characters required</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-pw">Confirm New Password</Label>
+                    <div className="relative">
+                      <Input id="confirm-pw" type={showPw.confirm ? 'text' : 'password'} value={pwForm.confirm}
+                        onChange={(e) => setPwForm(p => ({ ...p, confirm: e.target.value }))}
+                        placeholder="Repeat new password" className="pr-10" />
+                      <button type="button" onClick={() => toggleShow('confirm')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showPw.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {pwForm.confirm && pwForm.newPw !== pwForm.confirm && <p className="text-xs text-destructive">Passwords do not match</p>}
+                  </div>
+                  <Button type="submit" disabled={pwLoading} className="w-full gap-2">
+                    <KeyRound className="w-4 h-4" />
+                    {pwLoading ? 'Changing Password...' : 'Change Password'}
+                  </Button>
+                </form>
+              )}
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
