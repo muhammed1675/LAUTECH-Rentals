@@ -54,7 +54,7 @@ export function BuyTokens() {
         amount: quantity * 1000,
         email,
         name: user?.full_name || user?.email,
-        narration: `${quantity} Token${quantity > 1 ? 's' : ''} — LAUTECH Rentals`,
+        narration: `${quantity} Token${quantity > 1 ? 's' : ''} — Rentora`,
 
         onSuccess: async () => {
           toast.success(`Payment confirmed! ${quantity} token${quantity > 1 ? 's' : ''} added to your wallet.`);
