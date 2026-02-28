@@ -66,7 +66,7 @@ export function Layout({ children }) {
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
                 <Building2 className="w-6 h-6 text-primary-foreground" />
               </div>
-              <span className="font-bold text-xl tracking-tight">LAUTECH Rentals</span>
+              <span className="font-bold text-xl tracking-tight">Rentora</span>
             </Link>
 
             {/* Desktop Nav */}
