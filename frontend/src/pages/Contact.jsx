@@ -137,7 +137,7 @@ export function Contact() {
               </div>
               <div>
                 <p className="font-semibold text-sm">Our Location</p>
-                <p className="text-xs text-foreground/55 mt-1">LAUTECH Campus</p>
+                <p className="text-xs text-foreground/55 mt-1">Ogbomoso Campus</p>
                 <p className="text-sm text-foreground/70 mt-1">Ogbomoso, Oyo State, Nigeria</p>
               </div>
             </div>
