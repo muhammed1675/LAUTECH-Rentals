@@ -633,11 +633,7 @@ export function AdminDashboard() {
                         <p className="font-semibold text-sm">{selectedMessage.name}</p>
                         <p className="text-xs text-foreground/55 truncate">{selectedMessage.email}</p>
                       </div>
-                      <a href={`mailto:${selectedMessage.email}?subject=Re: ${encodeURIComponent(selectedMessage.subject)}&body=${encodeURIComponent('Hi ' + selectedMessage.name + ',
-
-Thank you for contacting LAUTECH Rentals.
-
-')}`} target="_blank" rel="noreferrer">
+                      <a href={`mailto:${selectedMessage.email}?subject=Re: ${encodeURIComponent(selectedMessage.subject)}`} target="_blank" rel="noreferrer">
                         <Button size="sm" className="h-8 px-3 gap-1.5 text-xs shrink-0">
                           <Mail className="w-3.5 h-3.5" /> Reply
                         </Button>
