@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import {
   Search, Shield, Coins, Calendar, ArrowRight,
-  Building2, Users, CheckCircle2
+  Building2, Users, CheckCircle2, MessageSquare
 } from 'lucide-react';
 
 export function Home() {
@@ -28,37 +28,41 @@ export function Home() {
     <div className="min-h-screen" data-testid="home-page">
 
       {/* ── Hero ─────────────────────────────────────── */}
-      <section className="relative overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: 'url(https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg)' }}
-        >
-          {/* Stronger overlay so text pops */}
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/80 via-slate-900/60 to-background" />
-        </div>
+      <section className="relative h-[580px] md:h-[640px] flex items-center overflow-hidden">
+        {/* Background image */}
+        <img
+          src="https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+        {/* Solid dark overlay — no fade to white */}
+        <div className="absolute inset-0 bg-slate-900/70" />
 
-        <div className="relative container mx-auto px-4 py-24 md:py-36">
+        {/* Bottom hard edge so stats section starts cleanly */}
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-900/70" />
+
+        <div className="relative z-10 container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center space-y-6">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 border border-primary/30 text-primary-foreground text-sm font-medium animate-fade-in backdrop-blur-sm">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 text-sm font-medium backdrop-blur-sm">
               <Building2 className="w-4 h-4 text-primary" />
               <span className="text-white/90">Student Housing Made Easy</span>
             </div>
 
-            {/* Headline — white so it pops on dark overlay */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white animate-slide-up drop-shadow-lg">
+            {/* Headline */}
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-lg">
               Find Your Perfect
               <span className="text-primary block mt-2">Student Accommodation</span>
             </h1>
 
             {/* Subheadline */}
-            <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto animate-slide-up delay-100 drop-shadow">
+            <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto">
               Verified hostels and apartments near LAUTECH, Ogbomosho.
               Browse, unlock contacts, and schedule inspections — all in one place.
             </p>
 
             {/* CTAs */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 animate-slide-up delay-200">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
               <Link to="/browse">
                 <Button size="lg" className="gap-2 px-8 shadow-lg active:scale-95 transition-transform" data-testid="browse-btn">
                   <Search className="w-5 h-5" />
@@ -67,7 +71,7 @@ export function Home() {
               </Link>
               {!isAuthenticated && (
                 <Link to="/register">
-                  <Button size="lg" variant="outline" className="gap-2 px-8 bg-white/10 border-white/40 text-white hover:bg-white/20 active:scale-95 transition-transform backdrop-blur-sm" data-testid="get-started-btn">
+                  <Button size="lg" variant="outline" className="gap-2 px-8 bg-white/10 border-white/30 text-white hover:bg-white/20 active:scale-95 transition-transform backdrop-blur-sm" data-testid="get-started-btn">
                     Get Started
                     <ArrowRight className="w-5 h-5" />
                   </Button>
@@ -79,11 +83,11 @@ export function Home() {
       </section>
 
       {/* ── Stats ────────────────────────────────────── */}
-      <section className="py-14 bg-white border-y border-border/60 shadow-sm">
+      <section className="py-14 bg-white border-b border-border/60 shadow-sm">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {stats.map((stat, index) => (
-              <div key={stat.label} className="text-center animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
+              <div key={stat.label} className="text-center" style={{ animationDelay: `${index * 100}ms` }}>
                 <p className="text-3xl md:text-4xl font-bold text-primary">{stat.value}</p>
                 <p className="text-sm font-medium text-foreground/60 mt-1">{stat.label}</p>
               </div>
@@ -142,7 +146,6 @@ export function Home() {
               { step: '03', title: 'Inspect', desc: 'Schedule a physical inspection with our verified agents' },
             ].map((item, index) => (
               <div key={item.step} className="relative text-center group">
-                {/* Step number — now solid blue, clearly visible */}
                 <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-5 shadow-md group-hover:scale-105 transition-transform">
                   <span className="text-2xl font-bold text-white">{item.step}</span>
                 </div>
@@ -201,6 +204,11 @@ export function Home() {
                 <Building2 className="w-5 h-5 text-white" />
               </div>
               <span className="font-bold text-foreground">LAUTECH Rentals</span>
+            </div>
+            <div className="flex items-center gap-6 text-sm text-foreground/50">
+              <Link to="/contact" className="hover:text-foreground transition-colors">Contact Us</Link>
+              <Link to="/browse" className="hover:text-foreground transition-colors">Browse</Link>
+              {!isAuthenticated && <Link to="/register" className="hover:text-foreground transition-colors">Register</Link>}
             </div>
             <p className="text-sm text-foreground/50">
               © {new Date().getFullYear()} LAUTECH Rentals. All rights reserved.
