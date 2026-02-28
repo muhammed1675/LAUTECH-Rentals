@@ -564,7 +564,6 @@ export function AdminDashboard() {
             </div>
           </div>
         </TabsContent>
-      </Tabs>
 
         {/* ── Messages ── */}
         <TabsContent value="messages">
@@ -656,6 +655,7 @@ export function AdminDashboard() {
             </div>
           )}
         </TabsContent>
+      </Tabs>
 
       {/* Verification Review Dialog */}
       <Dialog open={!!selectedVerification} onOpenChange={() => setSelectedVerification(null)}>
