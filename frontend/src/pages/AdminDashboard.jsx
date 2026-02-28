@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { adminAPI, userAPI, verificationAPI, propertyAPI, inspectionAPI, transactionAPI } from '../lib/api';
+import { adminAPI, userAPI, verificationAPI, propertyAPI, inspectionAPI, transactionAPI, contactAPI } from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import {
   LayoutDashboard, Users, Shield, Building2, Calendar, Receipt,
   CheckCircle2, XCircle, Eye, Ban, UserCheck, TrendingUp, Coins,
-  Search, RefreshCw, Trash2, AlertTriangle, MapPin, User
+  Search, RefreshCw, Trash2, AlertTriangle, MapPin, User,
+  MessageSquare, Mail, Inbox, MailOpen
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -32,6 +33,8 @@ export function AdminDashboard() {
   const [selectedVerification, setSelectedVerification] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, property: null, deleting: false });
+  const [messages, setMessages] = useState([]);
+  const [selectedMessage, setSelectedMessage] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -42,12 +45,14 @@ export function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [statsRes, usersRes, verificationsRes, propertiesRes, inspectionsRes, txRes] = await Promise.all([
+      const [statsRes, usersRes, verificationsRes, propertiesRes, inspectionsRes, txRes, messagesRes] = await Promise.all([
         adminAPI.getStats(), userAPI.getAll(), verificationAPI.getAll(),
         propertyAPI.getAllAdmin(), inspectionAPI.getAll(), transactionAPI.getAll(),
+        contactAPI.getAll(),
       ]);
       setStats(statsRes.data); setUsers(usersRes.data); setVerifications(verificationsRes.data);
       setProperties(propertiesRes.data); setInspections(inspectionsRes.data); setTransactions(txRes.data);
+      setMessages(messagesRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load dashboard data');
@@ -88,6 +93,23 @@ export function AdminDashboard() {
       toast.error(error.message || 'Failed to delete property');
       setDeleteConfirm(prev => ({ ...prev, deleting: false }));
     }
+  };
+
+  const handleMarkRead = async (id) => {
+    try {
+      await contactAPI.markRead(id);
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, status: 'read' } : m));
+      if (selectedMessage?.id === id) setSelectedMessage(prev => ({ ...prev, status: 'read' }));
+    } catch { toast.error('Failed to mark as read'); }
+  };
+
+  const handleDeleteMessage = async (id) => {
+    try {
+      await contactAPI.delete(id);
+      setMessages(prev => prev.filter(m => m.id !== id));
+      if (selectedMessage?.id === id) setSelectedMessage(null);
+      toast.success('Message deleted');
+    } catch { toast.error('Failed to delete message'); }
   };
 
   const formatPrice = (price) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(price);
@@ -146,6 +168,14 @@ export function AdminDashboard() {
             </TabsTrigger>
             <TabsTrigger value="transactions" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm whitespace-nowrap">
               <Receipt className="w-4 h-4 shrink-0" /> Transactions
+            </TabsTrigger>
+            <TabsTrigger value="messages" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm whitespace-nowrap">
+              <MessageSquare className="w-4 h-4 shrink-0" /> Messages
+              {messages.filter(m => m.status === 'unread').length > 0 && (
+                <Badge variant="destructive" className="ml-1 text-xs px-1.5">
+                  {messages.filter(m => m.status === 'unread').length}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -535,6 +565,101 @@ export function AdminDashboard() {
           </div>
         </TabsContent>
       </Tabs>
+
+        {/* ── Messages ── */}
+        <TabsContent value="messages">
+          {messages.length === 0 ? (
+            <Card className="p-12 text-center border-border/60">
+              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                <Inbox className="w-7 h-7 text-foreground/30" />
+              </div>
+              <h3 className="font-semibold">No Messages Yet</h3>
+              <p className="text-sm text-foreground/55 mt-1">Messages submitted via the Contact page will appear here</p>
+            </Card>
+          ) : (
+            <div className="grid sm:grid-cols-5 gap-4">
+              {/* List */}
+              <div className="sm:col-span-2 space-y-2">
+                {messages.map((m) => (
+                  <Card
+                    key={m.id}
+                    onClick={() => { setSelectedMessage(m); if (m.status === 'unread') handleMarkRead(m.id); }}
+                    className={`p-4 cursor-pointer transition-all border ${
+                      selectedMessage?.id === m.id
+                        ? 'border-primary bg-primary/5'
+                        : m.status === 'unread'
+                        ? 'border-blue-200 bg-blue-50/40 hover:border-blue-300'
+                        : 'border-border/60 hover:border-border'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {m.status === 'unread' && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
+                          <p className={`text-sm truncate ${m.status === 'unread' ? 'font-bold' : 'font-semibold'}`}>{m.name}</p>
+                        </div>
+                        <p className="text-xs text-foreground/55 truncate mt-0.5">{m.subject}</p>
+                        <p className="text-xs text-foreground/40 line-clamp-1 mt-0.5">{m.message}</p>
+                      </div>
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        <p className="text-xs text-foreground/40 whitespace-nowrap">{new Date(m.created_at).toLocaleDateString()}</p>
+                        <Badge className={m.status === 'unread' ? 'bg-blue-100 text-blue-700 text-xs' : 'bg-gray-100 text-gray-600 text-xs'}>{m.status}</Badge>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Detail */}
+              <div className="sm:col-span-3">
+                {selectedMessage ? (
+                  <Card className="p-6 border-border/60">
+                    <div className="flex items-start justify-between gap-3 mb-5">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-lg leading-tight">{selectedMessage.subject}</h3>
+                        <p className="text-xs text-foreground/50 mt-1">{new Date(selectedMessage.created_at).toLocaleString()}</p>
+                      </div>
+                      <Button variant="destructive" size="sm" className="h-7 px-2 shrink-0" onClick={() => handleDeleteMessage(selectedMessage.id)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+
+                    {/* Sender */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 mb-5">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <User className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm">{selectedMessage.name}</p>
+                        <p className="text-xs text-foreground/55 truncate">{selectedMessage.email}</p>
+                      </div>
+                      <a href={`mailto:${selectedMessage.email}?subject=Re: ${encodeURIComponent(selectedMessage.subject)}&body=${encodeURIComponent('Hi ' + selectedMessage.name + ',
+
+Thank you for contacting LAUTECH Rentals.
+
+')}`} target="_blank" rel="noreferrer">
+                        <Button size="sm" className="h-8 px-3 gap-1.5 text-xs shrink-0">
+                          <Mail className="w-3.5 h-3.5" /> Reply
+                        </Button>
+                      </a>
+                    </div>
+
+                    {/* Body */}
+                    <div className="bg-white border border-border/50 rounded-lg p-4 min-h-[120px]">
+                      <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{selectedMessage.message}</p>
+                    </div>
+                    <p className="text-xs text-foreground/40 mt-3 text-center">Clicking Reply opens your email client with a pre-filled reply</p>
+                  </Card>
+                ) : (
+                  <Card className="p-12 text-center border-border/60">
+                    <MailOpen className="w-12 h-12 text-foreground/20 mx-auto mb-3" />
+                    <p className="text-sm text-foreground/50">Select a message to read it</p>
+                  </Card>
+                )}
+              </div>
+            </div>
+          )}
+        </TabsContent>
 
       {/* Verification Review Dialog */}
       <Dialog open={!!selectedVerification} onOpenChange={() => setSelectedVerification(null)}>
