@@ -125,27 +125,20 @@ export function PropertyDetails() {
         amount: 2000,
         email: inspectionEmail,
         name: user?.full_name || user?.email,
-        narration: `Inspection Fee - ${property?.title}`,
+        narration: `Inspection Fee — ${property?.title}`,
 
-        onSuccess: async (data) => {
-          console.log('Inspection payment success:', data);
-          toast.success('Payment successful! Your inspection has been scheduled.');
-          // Mark inspection payment as completed
-          try {
-            const { paymentAPI } = await import('../lib/api');
-            await paymentAPI.simulate(reference);
-          } catch (err) {
-            console.warn('Could not auto-confirm inspection payment:', err);
-          }
+        onSuccess: () => {
+          toast.success('Payment confirmed! Your inspection has been scheduled. The agent will contact you soon.');
+          setRequestingInspection(false);
         },
 
-        onFailed: (data) => {
-          console.error('Inspection payment failed:', data);
-          toast.error('Payment failed. Please try again.');
+        onFailed: () => {
+          toast.error('Payment was not successful. Please try again.');
+          setRequestingInspection(false);
         },
 
         onClose: () => {
-          toast.info('Payment window closed.');
+          setRequestingInspection(false);
         },
       });
 
