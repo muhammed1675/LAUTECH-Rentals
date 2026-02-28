@@ -54,7 +54,7 @@ export async function openKorapayCheckout({
     reference,
     amount,
     currency: 'NGN',
-    narration: narration || 'LAUTECH Rentals',
+    narration: narration || 'Rentora',
     customer: {
       name: name || 'Customer',
       email,
