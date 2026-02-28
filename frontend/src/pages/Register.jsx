@@ -98,7 +98,7 @@ export function Register() {
 
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold tracking-tight">Create Account</h1>
-          <p className="text-muted-foreground mt-2">Join LAUTECH Rentals today</p>
+          <p className="text-muted-foreground mt-2">Join Rentora today</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
