@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { contactAPI } from '../lib/api';
 import { Button } from '../components/ui/button';
@@ -7,7 +8,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { MessageSquare, Mail, Phone, MapPin, CheckCircle2, Send } from 'lucide-react';
+import { MessageSquare, Mail, Phone, MapPin, CheckCircle2, Send, ArrowLeft, Home } from 'lucide-react';
 import { toast } from 'sonner';
 
 const SUBJECTS = [
@@ -22,6 +23,7 @@ const SUBJECTS = [
 
 export function Contact() {
   const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   const [form, setForm] = useState({
     name: user?.full_name || '',
@@ -70,15 +72,24 @@ export function Contact() {
         <p className="text-foreground/60 mb-8">
           We'll review your message and get back to you at <span className="font-medium text-foreground">{form.email}</span> as soon as possible.
         </p>
-        <Button onClick={() => { setSubmitted(false); setForm({ name: user?.full_name || '', email: user?.email || '', subject: '', message: '' }); }}>
-          Send Another Message
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button onClick={() => { setSubmitted(false); setForm({ name: user?.full_name || '', email: user?.email || '', subject: '', message: '' }); }}>
+            Send Another Message
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/')} className="gap-2">
+            <Home className="w-4 h-4" /> Back to Home
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
+      {/* Back button */}
+      <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 gap-2 -ml-2">
+        <ArrowLeft className="w-4 h-4" /> Back
+      </Button>
       {/* Header */}
       <div className="text-center mb-10">
         <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
@@ -114,7 +125,7 @@ export function Contact() {
               <div>
                 <p className="font-semibold text-sm">Call Us</p>
                 <p className="text-xs text-foreground/55 mt-1">Mon – Fri, 9am – 5pm</p>
-                <p className="text-sm text-primary mt-1 font-medium">+234 913 113 3832</p>
+                <p className="text-sm text-primary mt-1 font-medium">+234 800 000 0000</p>
               </div>
             </div>
           </Card>
