@@ -781,15 +781,39 @@ export const contactAPI = {
 // ============== STORAGE APIs ==============
 
 export const storageAPI = {
+  uploadFile: async (file, folder = 'verification') => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${folder}/${uuidv4()}.${fileExt}`;
+    const bucket = 'property-images'; // use existing bucket
+    
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+    
+    if (error) throw new Error(error.message || 'Upload failed');
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(fileName);
+    
+    return { data: { url: publicUrl, path: data.path } };
+  },
+
   uploadImage: async (file, bucket = 'property-images') => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${uuidv4()}.${fileExt}`;
     
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(fileName, file);
+      .upload(fileName, file, {
+        contentType: file.type,
+        upsert: false,
+      });
     
-    if (error) throw error;
+    if (error) throw new Error(error.message || 'Upload failed');
     
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
