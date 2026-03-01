@@ -70,8 +70,28 @@ export function AdminDashboard() {
   };
 
   const handleReviewVerification = async (requestId, status) => {
-    try { await verificationAPI.review(requestId, status, user.id); toast.success(`Verification ${status}`); setSelectedVerification(null); fetchData(); }
-    catch { toast.error('Failed to review'); }
+    try {
+      await verificationAPI.review(requestId, status, user.id);
+      toast.success(`Verification ${status}`);
+      
+      // Open pre-filled email to notify agent
+      if (selectedVerification) {
+        const name = selectedVerification.user_name;
+        const email = selectedVerification.user_email;
+        const isApproved = status === 'approved';
+        const subject = isApproved
+          ? 'Your Rentora Agent Account Has Been Approved!'
+          : 'Update on Your Rentora Agent Application';
+        const body = isApproved
+          ? `Hi ${name},\n\nCongratulations! Your agent verification has been approved on Rentora.\n\nYou can now log in and start listing properties on the platform. Head to your Agent Dashboard to add your first property.\n\nWelcome aboard!\n\nBest regards,\nRentora Admin Team`
+          : `Hi ${name},\n\nThank you for applying to become an agent on Rentora.\n\nUnfortunately, we were unable to approve your application at this time. Please review your submitted documents and feel free to reapply.\n\nIf you have any questions, reply to this email.\n\nBest regards,\nRentora Admin Team`;
+        
+        window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+      }
+      
+      setSelectedVerification(null);
+      fetchData();
+    } catch { toast.error('Failed to review'); }
   };
 
   const handleApproveProperty = async (propertyId, status) => {
@@ -741,10 +761,32 @@ export function AdminDashboard() {
               )}
             </div>
           )}
-          <DialogFooter className="gap-2">
+          {/* Email agent directly */}
+          {selectedVerification && (
+            <div className="px-1 pb-2">
+              <a
+                href={`mailto:${selectedVerification.user_email}?subject=${encodeURIComponent('Your Rentora Agent Verification – ' + (selectedVerification.status === 'approved' ? 'Approved ✓' : 'Update'))}&body=${encodeURIComponent('Hi ' + selectedVerification.user_name + ',\n\nThank you for applying to become an agent on Rentora.\n\n[Write your message here]\n\nBest regards,\nRentora Admin Team')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2.5 w-full px-4 py-3 rounded-lg border border-border bg-muted/40 hover:bg-muted transition-colors"
+              >
+                <Mail className="w-4 h-4 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">Email {selectedVerification.user_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{selectedVerification.user_email}</p>
+                </div>
+              </a>
+              <p className="text-xs text-muted-foreground text-center mt-1.5">Opens your email client with a pre-filled message</p>
+            </div>
+          )}
+          <DialogFooter className="gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setSelectedVerification(null)}>Close</Button>
-            <Button onClick={() => handleReviewVerification(selectedVerification.id, 'approved')}>Approve</Button>
-            <Button variant="destructive" onClick={() => handleReviewVerification(selectedVerification.id, 'rejected')}>Reject</Button>
+            <Button variant="destructive" onClick={() => handleReviewVerification(selectedVerification.id, 'rejected')}>
+              <XCircle className="w-4 h-4 mr-1.5" /> Reject
+            </Button>
+            <Button onClick={() => handleReviewVerification(selectedVerification.id, 'approved')}>
+              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
