@@ -601,6 +601,16 @@ export const userAPI = {
       .eq('id', userId);
     
     if (error) throw error;
+
+    // If demoting to user, reject their approved verification so profile shows correctly
+    if (role === 'user') {
+      await supabase
+        .from('agent_verification_requests')
+        .update({ status: 'rejected' })
+        .eq('user_id', userId)
+        .eq('status', 'approved');
+    }
+
     return { data: { message: `Role updated to ${role}` } };
   },
 
