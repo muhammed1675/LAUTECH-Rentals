@@ -398,7 +398,7 @@ export function Layout({ children }) {
         {children}
       </main>
 
-          {/* Mobile Bottom Nav — Glass Pill */}
+      {/* Mobile Bottom Nav — Glass Pill */}
       <nav className="md:hidden fixed bottom-5 left-0 right-0 z-50 flex justify-center px-6">
         <div
           style={{
@@ -524,7 +524,8 @@ export function Layout({ children }) {
                 <div style={{
                   display: 'flex', alignItems: 'center',
                   padding: '9px 11px', borderRadius: '9999px',
-                  color: 'rgba(0,0,0,0.38)', transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+                  color: 'rgba(0,0,0,0.38)',
+                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
                 }}>
                   <User style={{ width: '18px', height: '18px' }} />
                 </div>
@@ -543,7 +544,8 @@ export function Layout({ children }) {
             </>
           )}
         </div>
-      </nav>/div>
+      </nav>
+    </div>
   );
 }
 
