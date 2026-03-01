@@ -103,7 +103,16 @@ export function AuthProvider({ children }) {
       setSession(s);
       if (s?.user) {
         const profile = await loadUserProfile(s.user);
-        if (mounted && profile) setUser(profile);
+        if (mounted && profile) {
+          // If suspended, kill the session immediately — even on page refresh
+          if (profile.suspended) {
+            await supabase.auth.signOut();
+            setUser(null);
+            setSession(null);
+          } else {
+            setUser(profile);
+          }
+        }
       }
       if (mounted) setLoading(false);
     });
@@ -216,7 +225,15 @@ export function AuthProvider({ children }) {
     const { data: { session: s } } = await supabase.auth.getSession();
     if (s?.user) {
       const profile = await loadUserProfile(s.user);
-      if (profile) setUser(profile);
+      if (profile) {
+        if (profile.suspended) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setSession(null);
+        } else {
+          setUser(profile);
+        }
+      }
     }
   };
 
