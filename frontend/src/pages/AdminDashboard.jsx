@@ -60,11 +60,19 @@ export function AdminDashboard() {
   };
 
   const handleUpdateRole = async (userId, role) => {
+    if (userId === user.id) {
+      toast.error('You cannot change your own role.');
+      return;
+    }
     try { await userAPI.updateRole(userId, role); toast.success('Role updated'); fetchData(); }
     catch { toast.error('Failed to update role'); }
   };
 
   const handleSuspendUser = async (userId, suspended) => {
+    if (userId === user.id) {
+      toast.error('You cannot suspend your own account.');
+      return;
+    }
     try { await userAPI.suspend(userId, suspended); toast.success(suspended ? 'User suspended' : 'User unsuspended'); fetchData(); }
     catch { toast.error('Failed to update user'); }
   };
@@ -262,7 +270,7 @@ export function AdminDashboard() {
                     </Badge>
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    <Select value={u.role} onValueChange={(value) => handleUpdateRole(u.id, value)}>
+                    <Select value={u.role} onValueChange={(value) => handleUpdateRole(u.id, value)} disabled={u.id === user.id}>
                       <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="user">User</SelectItem>
@@ -270,9 +278,13 @@ export function AdminDashboard() {
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button variant={u.suspended ? 'outline' : 'destructive'} size="sm" className="h-8 text-xs gap-1" onClick={() => handleSuspendUser(u.id, !u.suspended)}>
-                      <Ban className="w-3 h-3" /> {u.suspended ? 'Unsuspend' : 'Suspend'}
-                    </Button>
+                    {u.id === user.id ? (
+                      <span className="text-xs text-muted-foreground italic px-1">You</span>
+                    ) : (
+                      <Button variant={u.suspended ? 'outline' : 'destructive'} size="sm" className="h-8 text-xs gap-1" onClick={() => handleSuspendUser(u.id, !u.suspended)}>
+                        <Ban className="w-3 h-3" /> {u.suspended ? 'Unsuspend' : 'Suspend'}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -288,13 +300,13 @@ export function AdminDashboard() {
                     <TableCell className="font-medium">{u.full_name}</TableCell>
                     <TableCell className="text-sm">{u.email}</TableCell>
                     <TableCell>
-                      <Select value={u.role} onValueChange={(value) => handleUpdateRole(u.id, value)}>
+                      <Select value={u.role} onValueChange={(value) => handleUpdateRole(u.id, value)} disabled={u.id === user.id}>
                         <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="user">User</SelectItem><SelectItem value="agent">Agent</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent>
                       </Select>
                     </TableCell>
                     <TableCell><Badge variant={u.suspended ? 'destructive' : 'outline'}>{u.suspended ? 'Suspended' : 'Active'}</Badge></TableCell>
-                    <TableCell><Button variant={u.suspended ? 'outline' : 'destructive'} size="sm" onClick={() => handleSuspendUser(u.id, !u.suspended)}><Ban className="w-4 h-4" /></Button></TableCell>
+                    <TableCell>{u.id === user.id ? <span className="text-xs text-muted-foreground italic">You</span> : <Button variant={u.suspended ? 'outline' : 'destructive'} size="sm" onClick={() => handleSuspendUser(u.id, !u.suspended)}><Ban className="w-4 h-4" /></Button>}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
