@@ -403,62 +403,51 @@ export function Layout({ children }) {
         <div
           className="flex items-center gap-0.5 p-1.5"
           style={{
-            background: 'rgba(255,255,255,0.72)',
+            background: 'rgba(255,255,255,0.82)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid rgba(255,255,255,0.55)',
+            border: '1px solid rgba(255,255,255,0.6)',
             borderRadius: '9999px',
             boxShadow: '0 8px 32px rgba(0,0,0,0.13), 0 1px 4px rgba(0,0,0,0.07)',
           }}
         >
-          {(() => {
-            const navItems = [
-              { to: '/', icon: Home, label: 'Home', active: location.pathname === '/', testid: 'mobile-nav-home' },
-              { to: '/browse', icon: Search, label: 'Browse', active: isActive('/browse'), testid: 'mobile-nav-browse' },
-              { to: '/contact', icon: MessageSquare, label: 'Contact', active: isActive('/contact'), testid: 'mobile-nav-contact' },
-              ...(isAuthenticated ? [
-                { to: '/profile', icon: User, label: 'Profile', active: isActive('/profile'), testid: 'mobile-nav-profile' },
-                ...(isAgent ? [{ to: '/agent', icon: Building2, label: 'Agent', active: isActive('/agent'), testid: 'mobile-nav-agent' }] : []),
-                ...(isAdmin ? [{ to: '/admin', icon: Shield, label: 'Admin', active: isActive('/admin'), testid: 'mobile-nav-admin' }] : []),
-                { to: '/buy-tokens', icon: Coins, label: 'Tokens', active: isActive('/buy-tokens'), testid: 'mobile-nav-tokens' },
-              ] : [
-                { to: '/login', icon: User, label: 'Login', active: false, testid: 'mobile-nav-login' },
-                { to: '/register', icon: Plus, label: 'Register', active: false, testid: 'mobile-nav-register' },
-              ]),
-            ];
-
-            return navItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                data-testid={item.testid}
-                style={{ borderRadius: '9999px', transition: 'all 0.25s cubic-bezier(0.34,1.56,0.64,1)' }}
-              >
-                {item.active ? (
-                  <span
-                    className="flex items-center gap-1.5 px-4 py-2.5 text-white text-xs font-semibold"
-                    style={{
-                      background: 'hsl(var(--primary))',
-                      borderRadius: '9999px',
-                      boxShadow: '0 2px 14px hsl(var(--primary)/0.45)',
-                      whiteSpace: 'nowrap',
-                      display: 'flex',
-                    }}
-                  >
-                    <item.icon className="w-4 h-4 shrink-0" />
-                    {item.label}
-                  </span>
-                ) : (
-                  <span
-                    className="flex items-center justify-center w-10 h-10 text-foreground/40 hover:text-foreground/70 transition-colors"
-                    style={{ borderRadius: '9999px', display: 'flex' }}
-                  >
-                    <item.icon className="w-[18px] h-[18px]" />
-                  </span>
-                )}
-              </Link>
-            ));
-          })()}
+          {[
+            { to: '/', icon: Home, label: 'Home', active: location.pathname === '/' },
+            { to: '/browse', icon: Search, label: 'Browse', active: isActive('/browse') },
+            { to: '/contact', icon: MessageSquare, label: 'Contact', active: isActive('/contact') },
+            ...(isAuthenticated ? [
+              { to: '/profile', icon: User, label: 'Profile', active: isActive('/profile') },
+              ...(isAgent ? [{ to: '/agent', icon: Building2, label: 'Agent', active: isActive('/agent') }] : []),
+              ...(isAdmin ? [{ to: '/admin', icon: Shield, label: 'Admin', active: isActive('/admin') }] : []),
+              { to: '/buy-tokens', icon: Coins, label: 'Tokens', active: isActive('/buy-tokens') },
+            ] : [
+              { to: '/login', icon: User, label: 'Login', active: false },
+              { to: '/register', icon: Plus, label: 'Sign Up', active: false },
+            ]),
+          ].map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: item.active ? '5px' : '0',
+                padding: item.active ? '9px 15px' : '10px 11px',
+                borderRadius: '9999px',
+                background: item.active ? 'hsl(var(--primary))' : 'transparent',
+                color: item.active ? 'white' : 'rgba(0,0,0,0.38)',
+                transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              }}
+            >
+              <item.icon style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+              {item.active && (
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>{item.label}</span>
+              )}
+            </Link>
+          ))}
         </div>
       </nav>
     </div>
