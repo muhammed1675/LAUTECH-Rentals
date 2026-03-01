@@ -615,27 +615,12 @@ export const userAPI = {
   },
 
   suspend: async (userId, suspended) => {
-    console.log('Suspending user:', userId, 'suspended:', suspended);
-    
-    // First verify the user exists
-    const { data: existing, error: fetchError } = await supabase
-      .from('users')
-      .select('id, suspended')
-      .eq('id', userId)
-      .single();
-    
-    console.log('User found:', existing, 'fetch error:', fetchError);
-    
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('users')
       .update({ suspended })
-      .eq('id', userId)
-      .select();
-    
-    console.log('Update result:', data, 'error:', error);
+      .eq('id', userId);
     
     if (error) throw error;
-    if (!data || data.length === 0) throw new Error('User not found or update failed');
     return { data: { message: suspended ? 'User suspended' : 'User unsuspended' } };
   }
 };
