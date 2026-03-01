@@ -149,6 +149,10 @@ export function AuthProvider({ children }) {
           .single();
 
         if (found) {
+          if (found.suspended) {
+            await supabase.auth.signOut();
+            throw new Error('Your account has been suspended. Please contact support for assistance.');
+          }
           const { data: wallet } = await supabase
             .from('wallets')
             .select('token_balance')
@@ -161,6 +165,12 @@ export function AuthProvider({ children }) {
         }
 
         throw new Error('Could not load your profile. Please try again in a moment.');
+      }
+
+      // Check if user is suspended — block login with clear message
+      if (profile.suspended) {
+        await supabase.auth.signOut();
+        throw new Error('Your account has been suspended. Please contact support for assistance.');
       }
 
       setUser(profile);
