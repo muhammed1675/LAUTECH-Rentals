@@ -18,8 +18,7 @@ import {
   Receipt,
   Calendar,
   Plus,
-  BadgeCheck,
-  MessageSquare
+  BadgeCheck
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -66,7 +65,7 @@ export function Layout({ children }) {
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
                 <Building2 className="w-6 h-6 text-primary-foreground" />
               </div>
-              <span className="font-bold text-xl tracking-tight">Rentora</span>
+              <span className="font-bold text-xl tracking-tight">LAUTECH Rentals</span>
             </Link>
 
             {/* Desktop Nav */}
@@ -247,10 +246,6 @@ export function Layout({ children }) {
                       <Coins className="w-4 h-4 mr-2" />
                       Buy Tokens
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/contact')} className="cursor-pointer">
-                      <MessageSquare className="w-4 h-4 mr-2" />
-                      Contact Us
-                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
                       <LogOut className="w-4 h-4 mr-2" />
@@ -284,7 +279,7 @@ export function Layout({ children }) {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Building2 className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Rentora</span>
+            <span className="font-bold text-lg tracking-tight">LAUTECH</span>
           </Link>
 
           <div className="flex items-center gap-2">
@@ -430,10 +425,6 @@ export function Layout({ children }) {
           >
             <Search className={`w-5 h-5 ${isActive('/browse') ? 'scale-110' : ''} transition-transform`} />
             <span className="text-[10px] font-medium">Browse</span>
-          </Link>
-          <Link to="/contact" className={`flex flex-col items-center justify-center gap-0.5 p-2 rounded-lg transition-all ${isActive('/contact') ? 'text-primary' : 'text-foreground/45'}`} data-testid="mobile-nav-contact">
-            <MessageSquare className={`w-5 h-5 ${isActive('/contact') ? 'scale-110' : ''} transition-transform`} />
-            <span className="text-[10px] font-semibold">Contact</span>
           </Link>
 
           {isAuthenticated ? (
