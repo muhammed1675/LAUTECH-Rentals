@@ -499,6 +499,7 @@ export const verificationAPI = {
         user_email: user.email,
         id_card_url: data.id_card_url,
         selfie_url: data.selfie_url,
+        agreement_url: data.agreement_url || null,
         address: data.address,
         status: 'pending'
       });
