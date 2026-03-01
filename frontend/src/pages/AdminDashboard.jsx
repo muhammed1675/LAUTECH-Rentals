@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import {
   LayoutDashboard, Users, Shield, Building2, Calendar, Receipt,
   CheckCircle2, XCircle, Eye, Ban, UserCheck, TrendingUp, Coins,
-  Search, RefreshCw, Trash2, AlertTriangle, MapPin, User,
+  Search, RefreshCw, Trash2, AlertTriangle, MapPin, User, FileText,
   MessageSquare, Mail, Inbox, MailOpen
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -703,11 +703,42 @@ export function AdminDashboard() {
             <DialogDescription>Review the agent verification documents</DialogDescription>
           </DialogHeader>
           {selectedVerification && (
-            <div className="space-y-4">
-              <div><p className="text-xs text-muted-foreground">User</p><p className="font-medium">{selectedVerification.user_name}</p><p className="text-sm text-muted-foreground">{selectedVerification.user_email}</p></div>
-              <div><p className="text-xs text-muted-foreground">Address</p><p className="text-sm">{selectedVerification.address}</p></div>
-              <div><p className="text-xs text-muted-foreground mb-2">ID Card</p><img src={selectedVerification.id_card_url} alt="ID Card" className="w-full max-h-48 object-contain rounded-lg border" /></div>
-              <div><p className="text-xs text-muted-foreground mb-2">Selfie</p><img src={selectedVerification.selfie_url} alt="Selfie" className="w-full max-h-48 object-contain rounded-lg border" /></div>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {/* Applicant Info */}
+              <div className="p-3 rounded-lg bg-muted/40">
+                <p className="font-semibold">{selectedVerification.user_name}</p>
+                <p className="text-sm text-muted-foreground">{selectedVerification.user_email}</p>
+                <p className="text-sm text-muted-foreground mt-1">{selectedVerification.address}</p>
+              </div>
+              {/* ID Card */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">ID Card</p>
+                <img src={selectedVerification.id_card_url} alt="ID Card" className="w-full max-h-52 object-contain rounded-lg border bg-muted/20" />
+              </div>
+              {/* Selfie */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Selfie with ID</p>
+                <img src={selectedVerification.selfie_url} alt="Selfie" className="w-full max-h-52 object-contain rounded-lg border bg-muted/20" />
+              </div>
+              {/* Signed Agreement PDF */}
+              {selectedVerification.agreement_url && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Signed Agreement</p>
+                  <a href={selectedVerification.agreement_url} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-3 p-3 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
+                    <FileText className="w-8 h-8 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-primary">View Signed Agreement PDF</p>
+                      <p className="text-xs text-muted-foreground">Click to open in new tab</p>
+                    </div>
+                  </a>
+                </div>
+              )}
+              {!selectedVerification.agreement_url && (
+                <div className="p-3 rounded-lg border border-yellow-200 bg-yellow-50">
+                  <p className="text-xs text-yellow-700 font-medium">⚠ No signed agreement uploaded</p>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter className="gap-2">
