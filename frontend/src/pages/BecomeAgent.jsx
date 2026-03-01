@@ -57,9 +57,9 @@ export function BecomeAgent() {
       toast.loading('Uploading documents...', { id: 'upload' });
 
       const [idCardResult, selfieResult, agreementResult] = await Promise.all([
-        storageAPI.uploadImage(idCardFile, 'verification-docs'),
-        storageAPI.uploadImage(selfieFile, 'verification-docs'),
-        storageAPI.uploadImage(agreementFile, 'verification-docs'),
+        storageAPI.uploadFile(idCardFile, 'verification/id-cards'),
+        storageAPI.uploadFile(selfieFile, 'verification/selfies'),
+        storageAPI.uploadFile(agreementFile, 'verification/agreements'),
       ]);
 
       toast.dismiss('upload');
