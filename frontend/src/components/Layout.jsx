@@ -398,59 +398,152 @@ export function Layout({ children }) {
         {children}
       </main>
 
-      {/* Mobile Bottom Nav — Glassmorphism Floating Pill */}
+          {/* Mobile Bottom Nav — Glass Pill */}
       <nav className="md:hidden fixed bottom-5 left-0 right-0 z-50 flex justify-center px-6">
         <div
-          className="flex items-center gap-0.5 p-1.5"
           style={{
-            background: 'rgba(255,255,255,0.82)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid rgba(255,255,255,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            padding: '6px',
             borderRadius: '9999px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.13), 0 1px 4px rgba(0,0,0,0.07)',
+            background: 'rgba(255,255,255,0.82)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.6)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.13)',
           }}
         >
-          {[
-            { to: '/', icon: Home, label: 'Home', active: location.pathname === '/' },
-            { to: '/browse', icon: Search, label: 'Browse', active: isActive('/browse') },
-            { to: '/contact', icon: MessageSquare, label: 'Contact', active: isActive('/contact') },
-            ...(isAuthenticated ? [
-              { to: '/profile', icon: User, label: 'Profile', active: isActive('/profile') },
-              ...(isAgent ? [{ to: '/agent', icon: Building2, label: 'Agent', active: isActive('/agent') }] : []),
-              ...(isAdmin ? [{ to: '/admin', icon: Shield, label: 'Admin', active: isActive('/admin') }] : []),
-              { to: '/buy-tokens', icon: Coins, label: 'Tokens', active: isActive('/buy-tokens') },
-            ] : [
-              { to: '/login', icon: User, label: 'Login', active: false },
-              { to: '/register', icon: Plus, label: 'Sign Up', active: false },
-            ]),
-          ].map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: item.active ? '5px' : '0',
-                padding: item.active ? '9px 15px' : '10px 11px',
-                borderRadius: '9999px',
-                background: item.active ? 'hsl(var(--primary))' : 'transparent',
-                color: item.active ? 'white' : 'rgba(0,0,0,0.38)',
-                transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-              }}
-            >
-              <item.icon style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-              {item.active && (
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>{item.label}</span>
+          <Link to="/" data-testid="mobile-nav-home" style={{ textDecoration: 'none' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: location.pathname === '/' ? '6px' : '0',
+              padding: location.pathname === '/' ? '8px 14px' : '9px 11px',
+              borderRadius: '9999px',
+              background: location.pathname === '/' ? 'hsl(var(--primary))' : 'transparent',
+              color: location.pathname === '/' ? 'white' : 'rgba(0,0,0,0.38)',
+              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+            }}>
+              <Home style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+              {location.pathname === '/' && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Home</span>}
+            </div>
+          </Link>
+
+          <Link to="/browse" data-testid="mobile-nav-browse" style={{ textDecoration: 'none' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: isActive('/browse') ? '6px' : '0',
+              padding: isActive('/browse') ? '8px 14px' : '9px 11px',
+              borderRadius: '9999px',
+              background: isActive('/browse') ? 'hsl(var(--primary))' : 'transparent',
+              color: isActive('/browse') ? 'white' : 'rgba(0,0,0,0.38)',
+              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+            }}>
+              <Search style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+              {isActive('/browse') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Browse</span>}
+            </div>
+          </Link>
+
+          <Link to="/contact" data-testid="mobile-nav-contact" style={{ textDecoration: 'none' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: isActive('/contact') ? '6px' : '0',
+              padding: isActive('/contact') ? '8px 14px' : '9px 11px',
+              borderRadius: '9999px',
+              background: isActive('/contact') ? 'hsl(var(--primary))' : 'transparent',
+              color: isActive('/contact') ? 'white' : 'rgba(0,0,0,0.38)',
+              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+            }}>
+              <MessageSquare style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+              {isActive('/contact') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Contact</span>}
+            </div>
+          </Link>
+
+          {isAuthenticated ? (
+            <>
+              <Link to="/profile" data-testid="mobile-nav-profile" style={{ textDecoration: 'none' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: isActive('/profile') ? '6px' : '0',
+                  padding: isActive('/profile') ? '8px 14px' : '9px 11px',
+                  borderRadius: '9999px',
+                  background: isActive('/profile') ? 'hsl(var(--primary))' : 'transparent',
+                  color: isActive('/profile') ? 'white' : 'rgba(0,0,0,0.38)',
+                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+                }}>
+                  <User style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+                  {isActive('/profile') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Profile</span>}
+                </div>
+              </Link>
+
+              {isAgent && (
+                <Link to="/agent" data-testid="mobile-nav-agent" style={{ textDecoration: 'none' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: isActive('/agent') ? '6px' : '0',
+                    padding: isActive('/agent') ? '8px 14px' : '9px 11px',
+                    borderRadius: '9999px',
+                    background: isActive('/agent') ? 'hsl(var(--primary))' : 'transparent',
+                    color: isActive('/agent') ? 'white' : 'rgba(0,0,0,0.38)',
+                    transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+                  }}>
+                    <Building2 style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+                    {isActive('/agent') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Agent</span>}
+                  </div>
+                </Link>
               )}
-            </Link>
-          ))}
+
+              {isAdmin && (
+                <Link to="/admin" data-testid="mobile-nav-admin" style={{ textDecoration: 'none' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: isActive('/admin') ? '6px' : '0',
+                    padding: isActive('/admin') ? '8px 14px' : '9px 11px',
+                    borderRadius: '9999px',
+                    background: isActive('/admin') ? 'hsl(var(--primary))' : 'transparent',
+                    color: isActive('/admin') ? 'white' : 'rgba(0,0,0,0.38)',
+                    transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+                  }}>
+                    <Shield style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+                    {isActive('/admin') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Admin</span>}
+                  </div>
+                </Link>
+              )}
+
+              <Link to="/buy-tokens" data-testid="mobile-nav-tokens" style={{ textDecoration: 'none' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: isActive('/buy-tokens') ? '6px' : '0',
+                  padding: isActive('/buy-tokens') ? '8px 14px' : '9px 11px',
+                  borderRadius: '9999px',
+                  background: isActive('/buy-tokens') ? 'hsl(var(--primary))' : 'transparent',
+                  color: isActive('/buy-tokens') ? 'white' : 'rgba(0,0,0,0.38)',
+                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+                }}>
+                  <Coins style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+                  {isActive('/buy-tokens') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Tokens</span>}
+                </div>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link to="/login" data-testid="mobile-nav-login" style={{ textDecoration: 'none' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center',
+                  padding: '9px 11px', borderRadius: '9999px',
+                  color: 'rgba(0,0,0,0.38)', transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+                }}>
+                  <User style={{ width: '18px', height: '18px' }} />
+                </div>
+              </Link>
+              <Link to="/register" data-testid="mobile-nav-register" style={{ textDecoration: 'none' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 14px', borderRadius: '9999px',
+                  background: 'hsl(var(--primary))', color: 'white',
+                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
+                }}>
+                  <Plus style={{ width: '18px', height: '18px' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Sign Up</span>
+                </div>
+              </Link>
+            </>
+          )}
         </div>
-      </nav>
-    </div>
+      </nav>/div>
   );
 }
 
