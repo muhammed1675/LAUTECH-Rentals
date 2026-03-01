@@ -205,6 +205,20 @@ export function AdminDashboard() {
                 <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center shrink-0"><Calendar className="w-5 h-5 text-secondary" /></div><div><p className="text-xs text-muted-foreground">Inspection Revenue</p><p className="text-xl font-bold">{formatPrice(stats?.inspection_revenue || 0)}</p></div></div></Card>
                 <Card className="p-4 bg-primary text-white"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0"><TrendingUp className="w-5 h-5" /></div><div><p className="text-xs opacity-80">Total Revenue</p><p className="text-xl font-bold">{formatPrice(stats?.total_revenue || 0)}</p></div></div></Card>
               </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                <Card className="p-4">
+                  <div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">Token Transactions</p><p className="text-2xl font-bold mt-1">{transactions.token_transactions.length}</p><p className="text-xs text-muted-foreground mt-0.5">{transactions.token_transactions.filter(t => t.status === 'completed').length} completed</p></div><Coins className="w-6 h-6 text-primary opacity-60" /></div>
+                </Card>
+                <Card className="p-4">
+                  <div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">Inspection Transactions</p><p className="text-2xl font-bold mt-1">{transactions.inspection_transactions.length}</p><p className="text-xs text-muted-foreground mt-0.5">{transactions.inspection_transactions.filter(t => t.status === 'completed').length} completed</p></div><Receipt className="w-6 h-6 text-secondary opacity-60" /></div>
+                </Card>
+                <Card className="p-4 border-yellow-200 bg-yellow-50">
+                  <p className="text-xs text-yellow-700 font-medium">Pending Inspections</p><p className="text-2xl font-bold mt-1 text-yellow-900">{stats?.pending_inspections || 0}</p><p className="text-xs text-yellow-600 mt-0.5">awaiting completion</p>
+                </Card>
+                <Card className="p-4 border-blue-200 bg-blue-50">
+                  <p className="text-xs text-blue-700 font-medium">Unread Messages</p><p className="text-2xl font-bold mt-1 text-blue-900">{stats?.unread_messages || 0}</p><p className="text-xs text-blue-600 mt-0.5">need response</p>
+                </Card>
+              </div>
             </>
           )}
         </TabsContent>
@@ -489,6 +503,30 @@ export function AdminDashboard() {
         {/* ── Transactions ── */}
         <TabsContent value="transactions">
           <div className="space-y-6">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Card className="p-4 bg-primary/5 border-primary/20">
+                <p className="text-xs text-muted-foreground">Token Transactions</p>
+                <p className="text-2xl font-bold mt-1">{transactions.token_transactions.length}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">total records</p>
+              </Card>
+              <Card className="p-4 bg-green-50 border-green-200">
+                <p className="text-xs text-green-700 font-medium">Completed Token Tx</p>
+                <p className="text-2xl font-bold mt-1 text-green-900">{transactions.token_transactions.filter(t => t.status === 'completed').length}</p>
+                <p className="text-xs text-green-600 font-medium mt-0.5">{formatPrice(transactions.token_transactions.filter(t => t.status === 'completed').reduce((s, t) => s + (t.amount || 0), 0))}</p>
+              </Card>
+              <Card className="p-4 bg-blue-50 border-blue-200">
+                <p className="text-xs text-muted-foreground">Inspection Transactions</p>
+                <p className="text-2xl font-bold mt-1">{transactions.inspection_transactions.length}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">total records</p>
+              </Card>
+              <Card className="p-4 bg-green-50 border-green-200">
+                <p className="text-xs text-green-700 font-medium">Completed Inspection Tx</p>
+                <p className="text-2xl font-bold mt-1 text-green-900">{transactions.inspection_transactions.filter(t => t.status === 'completed').length}</p>
+                <p className="text-xs text-green-600 font-medium mt-0.5">{formatPrice(transactions.inspection_transactions.filter(t => t.status === 'completed').reduce((s, t) => s + (t.amount || 0), 0))}</p>
+              </Card>
+            </div>
+
             <div>
               <h3 className="font-semibold text-sm mb-3">Token Transactions</h3>
               {/* Mobile cards */}
