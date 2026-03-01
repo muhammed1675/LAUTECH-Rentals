@@ -18,7 +18,8 @@ import {
   Receipt,
   Calendar,
   Plus,
-  BadgeCheck
+  BadgeCheck,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -65,7 +66,7 @@ export function Layout({ children }) {
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
                 <Building2 className="w-6 h-6 text-primary-foreground" />
               </div>
-              <span className="font-bold text-xl tracking-tight">LAUTECH Rentals</span>
+              <span className="font-bold text-xl tracking-tight">Rentora</span>
             </Link>
 
             {/* Desktop Nav */}
@@ -246,6 +247,10 @@ export function Layout({ children }) {
                       <Coins className="w-4 h-4 mr-2" />
                       Buy Tokens
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/contact')} className="cursor-pointer">
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      Contact Us
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
                       <LogOut className="w-4 h-4 mr-2" />
@@ -279,7 +284,7 @@ export function Layout({ children }) {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Building2 className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg tracking-tight">LAUTECH</span>
+            <span className="font-bold text-lg tracking-tight">Rentora</span>
           </Link>
 
           <div className="flex items-center gap-2">
@@ -394,152 +399,118 @@ export function Layout({ children }) {
       </header>
 
       {/* Main Content */}
-      <main className="pb-28 md:pb-8">
+      <main className="pb-20 md:pb-8">
         {children}
       </main>
 
-      {/* Mobile Bottom Nav — Glass Pill */}
-      <nav className="md:hidden fixed bottom-5 left-0 right-0 z-50 flex justify-center px-6">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            padding: '6px',
-            borderRadius: '9999px',
-            background: 'rgba(255,255,255,0.82)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.6)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.13)',
-          }}
-        >
-          <Link to="/" data-testid="mobile-nav-home" style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: location.pathname === '/' ? '6px' : '0',
-              padding: location.pathname === '/' ? '8px 14px' : '9px 11px',
-              borderRadius: '9999px',
-              background: location.pathname === '/' ? 'hsl(var(--primary))' : 'transparent',
-              color: location.pathname === '/' ? 'white' : 'rgba(0,0,0,0.38)',
-              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-            }}>
-              <Home style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-              {location.pathname === '/' && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Home</span>}
-            </div>
+      {/* Mobile Bottom Nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t">
+        <div className="flex items-center justify-around h-16 px-2">
+          <Link
+            to="/"
+            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+              isActive('/') && location.pathname === '/'
+                ? 'text-primary'
+                : 'text-muted-foreground'
+            }`}
+            data-testid="mobile-nav-home"
+          >
+            <Home className={`w-5 h-5 ${isActive('/') && location.pathname === '/' ? 'scale-110' : ''} transition-transform`} />
+            <span className="text-[10px] font-medium">Home</span>
           </Link>
-
-          <Link to="/browse" data-testid="mobile-nav-browse" style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: isActive('/browse') ? '6px' : '0',
-              padding: isActive('/browse') ? '8px 14px' : '9px 11px',
-              borderRadius: '9999px',
-              background: isActive('/browse') ? 'hsl(var(--primary))' : 'transparent',
-              color: isActive('/browse') ? 'white' : 'rgba(0,0,0,0.38)',
-              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-            }}>
-              <Search style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-              {isActive('/browse') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Browse</span>}
-            </div>
+          
+          <Link
+            to="/browse"
+            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+              isActive('/browse')
+                ? 'text-primary'
+                : 'text-muted-foreground'
+            }`}
+            data-testid="mobile-nav-browse"
+          >
+            <Search className={`w-5 h-5 ${isActive('/browse') ? 'scale-110' : ''} transition-transform`} />
+            <span className="text-[10px] font-medium">Browse</span>
           </Link>
-
-          <Link to="/contact" data-testid="mobile-nav-contact" style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: isActive('/contact') ? '6px' : '0',
-              padding: isActive('/contact') ? '8px 14px' : '9px 11px',
-              borderRadius: '9999px',
-              background: isActive('/contact') ? 'hsl(var(--primary))' : 'transparent',
-              color: isActive('/contact') ? 'white' : 'rgba(0,0,0,0.38)',
-              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-            }}>
-              <MessageSquare style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-              {isActive('/contact') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Contact</span>}
-            </div>
+          <Link to="/contact" className={`flex flex-col items-center justify-center gap-0.5 p-2 rounded-lg transition-all ${isActive('/contact') ? 'text-primary' : 'text-foreground/45'}`} data-testid="mobile-nav-contact">
+            <MessageSquare className={`w-5 h-5 ${isActive('/contact') ? 'scale-110' : ''} transition-transform`} />
+            <span className="text-[10px] font-semibold">Contact</span>
           </Link>
 
           {isAuthenticated ? (
             <>
-              <Link to="/profile" data-testid="mobile-nav-profile" style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: isActive('/profile') ? '6px' : '0',
-                  padding: isActive('/profile') ? '8px 14px' : '9px 11px',
-                  borderRadius: '9999px',
-                  background: isActive('/profile') ? 'hsl(var(--primary))' : 'transparent',
-                  color: isActive('/profile') ? 'white' : 'rgba(0,0,0,0.38)',
-                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                }}>
-                  <User style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-                  {isActive('/profile') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Profile</span>}
-                </div>
+              <Link
+                to="/profile"
+                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                  isActive('/profile')
+                    ? 'text-primary'
+                    : 'text-muted-foreground'
+                }`}
+                data-testid="mobile-nav-profile"
+              >
+                <User className={`w-5 h-5 ${isActive('/profile') ? 'scale-110' : ''} transition-transform`} />
+                <span className="text-[10px] font-medium">Profile</span>
               </Link>
 
               {isAgent && (
-                <Link to="/agent" data-testid="mobile-nav-agent" style={{ textDecoration: 'none' }}>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: isActive('/agent') ? '6px' : '0',
-                    padding: isActive('/agent') ? '8px 14px' : '9px 11px',
-                    borderRadius: '9999px',
-                    background: isActive('/agent') ? 'hsl(var(--primary))' : 'transparent',
-                    color: isActive('/agent') ? 'white' : 'rgba(0,0,0,0.38)',
-                    transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                  }}>
-                    <Building2 style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-                    {isActive('/agent') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Agent</span>}
-                  </div>
+                <Link
+                  to="/agent"
+                  className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                    isActive('/agent')
+                      ? 'text-secondary'
+                      : 'text-muted-foreground'
+                  }`}
+                  data-testid="mobile-nav-agent"
+                >
+                  <Building2 className={`w-5 h-5 ${isActive('/agent') ? 'scale-110' : ''} transition-transform`} />
+                  <span className="text-[10px] font-medium">Agent</span>
                 </Link>
               )}
 
               {isAdmin && (
-                <Link to="/admin" data-testid="mobile-nav-admin" style={{ textDecoration: 'none' }}>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: isActive('/admin') ? '6px' : '0',
-                    padding: isActive('/admin') ? '8px 14px' : '9px 11px',
-                    borderRadius: '9999px',
-                    background: isActive('/admin') ? 'hsl(var(--primary))' : 'transparent',
-                    color: isActive('/admin') ? 'white' : 'rgba(0,0,0,0.38)',
-                    transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                  }}>
-                    <Shield style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-                    {isActive('/admin') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Admin</span>}
-                  </div>
+                <Link
+                  to="/admin"
+                  className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                    isActive('/admin')
+                      ? 'text-destructive'
+                      : 'text-muted-foreground'
+                  }`}
+                  data-testid="mobile-nav-admin"
+                >
+                  <Shield className={`w-5 h-5 ${isActive('/admin') ? 'scale-110' : ''} transition-transform`} />
+                  <span className="text-[10px] font-medium">Admin</span>
                 </Link>
               )}
 
-              <Link to="/buy-tokens" data-testid="mobile-nav-tokens" style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: isActive('/buy-tokens') ? '6px' : '0',
-                  padding: isActive('/buy-tokens') ? '8px 14px' : '9px 11px',
-                  borderRadius: '9999px',
-                  background: isActive('/buy-tokens') ? 'hsl(var(--primary))' : 'transparent',
-                  color: isActive('/buy-tokens') ? 'white' : 'rgba(0,0,0,0.38)',
-                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                }}>
-                  <Coins style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-                  {isActive('/buy-tokens') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Tokens</span>}
-                </div>
+              <Link
+                to="/buy-tokens"
+                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                  isActive('/buy-tokens')
+                    ? 'text-primary'
+                    : 'text-muted-foreground'
+                }`}
+                data-testid="mobile-nav-tokens"
+              >
+                <Coins className={`w-5 h-5 ${isActive('/buy-tokens') ? 'scale-110' : ''} transition-transform`} />
+                <span className="text-[10px] font-medium">Tokens</span>
               </Link>
             </>
           ) : (
             <>
-              <Link to="/login" data-testid="mobile-nav-login" style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center',
-                  padding: '9px 11px', borderRadius: '9999px',
-                  color: 'rgba(0,0,0,0.38)',
-                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                }}>
-                  <User style={{ width: '18px', height: '18px' }} />
-                </div>
+              <Link
+                to="/login"
+                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg text-muted-foreground"
+                data-testid="mobile-nav-login"
+              >
+                <User className="w-5 h-5" />
+                <span className="text-[10px] font-medium">Login</span>
               </Link>
-              <Link to="/register" data-testid="mobile-nav-register" style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 14px', borderRadius: '9999px',
-                  background: 'hsl(var(--primary))', color: 'white',
-                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                }}>
-                  <Plus style={{ width: '18px', height: '18px' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Sign Up</span>
-                </div>
+              <Link
+                to="/register"
+                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg text-primary"
+                data-testid="mobile-nav-register"
+              >
+                <Plus className="w-5 h-5" />
+                <span className="text-[10px] font-medium">Register</span>
               </Link>
             </>
           )}
