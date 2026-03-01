@@ -394,117 +394,71 @@ export function Layout({ children }) {
       </header>
 
       {/* Main Content */}
-      <main className="pb-20 md:pb-8">
+      <main className="pb-28 md:pb-8">
         {children}
       </main>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t">
-        <div className="flex items-center justify-around h-16 px-2">
-          <Link
-            to="/"
-            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
-              isActive('/') && location.pathname === '/'
-                ? 'text-primary'
-                : 'text-muted-foreground'
-            }`}
-            data-testid="mobile-nav-home"
-          >
-            <Home className={`w-5 h-5 ${isActive('/') && location.pathname === '/' ? 'scale-110' : ''} transition-transform`} />
-            <span className="text-[10px] font-medium">Home</span>
-          </Link>
-          
-          <Link
-            to="/browse"
-            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
-              isActive('/browse')
-                ? 'text-primary'
-                : 'text-muted-foreground'
-            }`}
-            data-testid="mobile-nav-browse"
-          >
-            <Search className={`w-5 h-5 ${isActive('/browse') ? 'scale-110' : ''} transition-transform`} />
-            <span className="text-[10px] font-medium">Browse</span>
-          </Link>
+      {/* Mobile Bottom Nav — Glassmorphism Floating Pill */}
+      <nav className="md:hidden fixed bottom-5 left-0 right-0 z-50 flex justify-center px-6">
+        <div
+          className="flex items-center gap-0.5 p-1.5"
+          style={{
+            background: 'rgba(255,255,255,0.72)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255,255,255,0.55)',
+            borderRadius: '9999px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.13), 0 1px 4px rgba(0,0,0,0.07)',
+          }}
+        >
+          {(() => {
+            const navItems = [
+              { to: '/', icon: Home, label: 'Home', active: location.pathname === '/', testid: 'mobile-nav-home' },
+              { to: '/browse', icon: Search, label: 'Browse', active: isActive('/browse'), testid: 'mobile-nav-browse' },
+              { to: '/contact', icon: MessageSquare, label: 'Contact', active: isActive('/contact'), testid: 'mobile-nav-contact' },
+              ...(isAuthenticated ? [
+                { to: '/profile', icon: User, label: 'Profile', active: isActive('/profile'), testid: 'mobile-nav-profile' },
+                ...(isAgent ? [{ to: '/agent', icon: Building2, label: 'Agent', active: isActive('/agent'), testid: 'mobile-nav-agent' }] : []),
+                ...(isAdmin ? [{ to: '/admin', icon: Shield, label: 'Admin', active: isActive('/admin'), testid: 'mobile-nav-admin' }] : []),
+                { to: '/buy-tokens', icon: Coins, label: 'Tokens', active: isActive('/buy-tokens'), testid: 'mobile-nav-tokens' },
+              ] : [
+                { to: '/login', icon: User, label: 'Login', active: false, testid: 'mobile-nav-login' },
+                { to: '/register', icon: Plus, label: 'Register', active: false, testid: 'mobile-nav-register' },
+              ]),
+            ];
 
-          {isAuthenticated ? (
-            <>
+            return navItems.map((item) => (
               <Link
-                to="/profile"
-                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
-                  isActive('/profile')
-                    ? 'text-primary'
-                    : 'text-muted-foreground'
-                }`}
-                data-testid="mobile-nav-profile"
+                key={item.to}
+                to={item.to}
+                data-testid={item.testid}
+                style={{ borderRadius: '9999px', transition: 'all 0.25s cubic-bezier(0.34,1.56,0.64,1)' }}
               >
-                <User className={`w-5 h-5 ${isActive('/profile') ? 'scale-110' : ''} transition-transform`} />
-                <span className="text-[10px] font-medium">Profile</span>
+                {item.active ? (
+                  <span
+                    className="flex items-center gap-1.5 px-4 py-2.5 text-white text-xs font-semibold"
+                    style={{
+                      background: 'hsl(var(--primary))',
+                      borderRadius: '9999px',
+                      boxShadow: '0 2px 14px hsl(var(--primary)/0.45)',
+                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                    }}
+                  >
+                    <item.icon className="w-4 h-4 shrink-0" />
+                    {item.label}
+                  </span>
+                ) : (
+                  <span
+                    className="flex items-center justify-center w-10 h-10 text-foreground/40 hover:text-foreground/70 transition-colors"
+                    style={{ borderRadius: '9999px', display: 'flex' }}
+                  >
+                    <item.icon className="w-[18px] h-[18px]" />
+                  </span>
+                )}
               </Link>
-
-              {isAgent && (
-                <Link
-                  to="/agent"
-                  className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
-                    isActive('/agent')
-                      ? 'text-secondary'
-                      : 'text-muted-foreground'
-                  }`}
-                  data-testid="mobile-nav-agent"
-                >
-                  <Building2 className={`w-5 h-5 ${isActive('/agent') ? 'scale-110' : ''} transition-transform`} />
-                  <span className="text-[10px] font-medium">Agent</span>
-                </Link>
-              )}
-
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
-                    isActive('/admin')
-                      ? 'text-destructive'
-                      : 'text-muted-foreground'
-                  }`}
-                  data-testid="mobile-nav-admin"
-                >
-                  <Shield className={`w-5 h-5 ${isActive('/admin') ? 'scale-110' : ''} transition-transform`} />
-                  <span className="text-[10px] font-medium">Admin</span>
-                </Link>
-              )}
-
-              <Link
-                to="/buy-tokens"
-                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
-                  isActive('/buy-tokens')
-                    ? 'text-primary'
-                    : 'text-muted-foreground'
-                }`}
-                data-testid="mobile-nav-tokens"
-              >
-                <Coins className={`w-5 h-5 ${isActive('/buy-tokens') ? 'scale-110' : ''} transition-transform`} />
-                <span className="text-[10px] font-medium">Tokens</span>
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg text-muted-foreground"
-                data-testid="mobile-nav-login"
-              >
-                <User className="w-5 h-5" />
-                <span className="text-[10px] font-medium">Login</span>
-              </Link>
-              <Link
-                to="/register"
-                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg text-primary"
-                data-testid="mobile-nav-register"
-              >
-                <Plus className="w-5 h-5" />
-                <span className="text-[10px] font-medium">Register</span>
-              </Link>
-            </>
-          )}
+            ));
+          })()}
         </div>
       </nav>
     </div>
