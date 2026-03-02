@@ -18,7 +18,9 @@ import {
   Receipt,
   Calendar,
   Plus,
-  BadgeCheck
+  BadgeCheck,
+  MessageSquare,
+  Mail
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
