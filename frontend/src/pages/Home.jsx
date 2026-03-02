@@ -124,7 +124,7 @@ export function Home() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Why Choose Rentora?
+              Why Choose LAUTECH Rentals?
             </h2>
             <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
               We've built a platform designed specifically for LAUTECH students, 
@@ -215,6 +215,22 @@ export function Home() {
         </div>
       </section>
 
+      {/* Footer */}
+      <footer className="py-8 border-t">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="font-bold">LAUTECH Rentals</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} LAUTECH Rentals. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
