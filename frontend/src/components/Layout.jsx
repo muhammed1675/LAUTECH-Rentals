@@ -549,11 +549,10 @@ export function Layout({ children }) {
         </div>
       </nav>
 
-      {/* Footer — desktop only, hidden on mobile (bottom nav covers it) */}
+      {/* Desktop footer */}
       <footer className="hidden md:block border-t bg-muted/30 mt-auto">
         <div className="container mx-auto px-6 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            {/* Brand */}
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                 <Building2 className="w-4 h-4 text-primary-foreground" />
@@ -563,20 +562,52 @@ export function Layout({ children }) {
                 <p className="text-xs text-muted-foreground">Student Housing Platform, Ogbomosho</p>
               </div>
             </div>
-
-            {/* Links */}
             <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-muted-foreground">
               <Link to="/terms" className="hover:text-primary transition-colors">Terms & Conditions</Link>
               <Link to="/terms" className="hover:text-primary transition-colors">Privacy Policy</Link>
               <Link to="/terms" className="hover:text-primary transition-colors">Refund Policy</Link>
               <Link to="/contact" className="hover:text-primary transition-colors">Contact Us</Link>
             </div>
-
-            {/* Copyright */}
             <p className="text-xs text-muted-foreground">
               © {new Date().getFullYear()} Rentora. All rights reserved.
             </p>
           </div>
+        </div>
+      </footer>
+
+      {/* Mobile footer — above bottom nav (pb-28 gives space for the pill nav) */}
+      <footer className="md:hidden border-t bg-muted/30 pb-28">
+        <div className="px-6 py-5">
+          {/* Brand */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
+              <Building2 className="w-3.5 h-3.5 text-primary-foreground" />
+            </div>
+            <div>
+              <p className="font-bold text-xs">Rentora</p>
+              <p className="text-[10px] text-muted-foreground">Student Housing, Ogbomosho</p>
+            </div>
+          </div>
+
+          {/* Links grid */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mb-4">
+            <Link to="/terms" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+              Terms & Conditions
+            </Link>
+            <Link to="/terms" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+              Privacy Policy
+            </Link>
+            <Link to="/terms" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+              Refund Policy
+            </Link>
+            <Link to="/contact" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+              Contact Us
+            </Link>
+          </div>
+
+          <p className="text-[10px] text-muted-foreground">
+            © {new Date().getFullYear()} Rentora. All rights reserved.
+          </p>
         </div>
       </footer>
 
