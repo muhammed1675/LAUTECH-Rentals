@@ -3,8 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { Toaster } from "./components/ui/sonner";
 import Layout from "./components/Layout";
+
 // Pages
-import ResetPassword from "./pages/ResetPassword";
 import Home from "./pages/Home";
 import Browse from "./pages/Browse";
 import PropertyDetails from "./pages/PropertyDetails";
@@ -16,10 +16,13 @@ import AgentDashboard from "./pages/AgentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import BecomeAgent from "./pages/BecomeAgent";
 import PaymentCallback from "./pages/PaymentCallback";
-import { Contact } from './pages/Contact';
+import TermsAndPolicies from "./pages/TermsAndPolicies";
+import Contact from "./pages/Contact";
+
 // Protected Route wrapper
 function ProtectedRoute({ children, allowedRoles = [] }) {
   const { isAuthenticated, user, loading } = useAuth();
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -27,14 +30,18 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
       </div>
     );
   }
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
   if (allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
     return <Navigate to="/" replace />;
   }
+
   return children;
 }
+
 function AppRoutes() {
   return (
     <Routes>
@@ -44,9 +51,9 @@ function AppRoutes() {
       <Route path="/property/:id" element={<Layout><PropertyDetails /></Layout>} />
       <Route path="/login" element={<Layout><Login /></Layout>} />
       <Route path="/register" element={<Layout><Register /></Layout>} />
-      <Route path="/reset-password" element={<Layout><ResetPassword /></Layout>} />
       <Route path="/payment/callback" element={<Layout><PaymentCallback /></Layout>} />
       <Route path="/contact" element={<Layout><Contact /></Layout>} />
+
       {/* Protected Routes - Any authenticated user */}
       <Route
         path="/profile"
@@ -72,6 +79,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
       {/* Agent Routes */}
       <Route
         path="/agent"
@@ -81,6 +89,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
       {/* Admin Routes */}
       <Route
         path="/admin"
@@ -90,11 +99,16 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      {/* Legal */}
+      <Route path="/terms" element={<Layout><TermsAndPolicies /></Layout>} />
+
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
+
 function App() {
   return (
     <AuthProvider>
@@ -105,4 +119,5 @@ function App() {
     </AuthProvider>
   );
 }
+
 export default App;
