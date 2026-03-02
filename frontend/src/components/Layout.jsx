@@ -65,10 +65,7 @@ export function Layout({ children }) {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <span className="font-bold text-xl tracking-tight">Rentora</span>
+              <img src="/rentora-logo.png" alt="Rentora" className="h-9 w-auto" />
             </Link>
 
             {/* Desktop Nav */}
@@ -279,10 +276,7 @@ export function Layout({ children }) {
       <header className="md:hidden sticky top-0 z-50 glass border-b">
         <div className="flex items-center justify-between h-14 px-4">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-lg tracking-tight">Rentora</span>
+            <img src="/rentora-logo.png" alt="Rentora" className="h-8 w-auto" />
           </Link>
 
           <div className="flex items-center gap-2">
@@ -554,9 +548,7 @@ export function Layout({ children }) {
         <div className="container mx-auto px-6 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <Building2 className="w-4 h-4 text-primary-foreground" />
-              </div>
+              <img src="/rentora-logo.png" alt="Rentora" className="h-8 w-auto" />
               <div>
                 <p className="font-bold text-sm">Rentora</p>
                 <p className="text-xs text-muted-foreground">Student Housing Platform, Ogbomosho</p>
@@ -580,9 +572,7 @@ export function Layout({ children }) {
         <div className="px-6 py-5">
           {/* Brand */}
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-              <Building2 className="w-3.5 h-3.5 text-primary-foreground" />
-            </div>
+            <img src="/rentora-logo.png" alt="Rentora" className="h-7 w-auto" />
             <div>
               <p className="font-bold text-xs">Rentora</p>
               <p className="text-[10px] text-muted-foreground">Student Housing, Ogbomosho</p>
