@@ -127,14 +127,14 @@ export function Home() {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="py-16 md:py-24 bg-muted/30">
+      {/* ── How It Works ─────────────────────────────── */}
+      <section className="py-16 md:py-24 bg-slate-50 border-y border-border/40">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
               How It Works
             </h2>
-            <p className="text-muted-foreground mt-3">
+            <p className="text-foreground/60 mt-3 text-base">
               Finding your perfect accommodation in 3 simple steps
             </p>
           </div>
@@ -145,12 +145,14 @@ export function Home() {
               { step: '02', title: 'Unlock', desc: 'Buy tokens and unlock owner contacts for properties you like' },
               { step: '03', title: 'Inspect', desc: 'Schedule a physical inspection with our verified agents' },
             ].map((item, index) => (
-              <div key={item.step} className="relative text-center">
-                <div className="text-6xl font-bold text-primary/10 mb-4">{item.step}</div>
-                <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
-                <p className="text-sm text-muted-foreground">{item.desc}</p>
+              <div key={item.step} className="relative text-center group">
+                <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-5 shadow-md group-hover:scale-105 transition-transform">
+                  <span className="text-2xl font-bold text-white">{item.step}</span>
+                </div>
+                <h3 className="text-xl font-semibold mb-2 text-foreground">{item.title}</h3>
+                <p className="text-sm text-foreground/60 leading-relaxed">{item.desc}</p>
                 {index < 2 && (
-                  <ArrowRight className="hidden md:block absolute top-8 -right-4 w-8 h-8 text-primary/30" />
+                  <div className="hidden md:block absolute top-10 -right-4 text-primary/40 text-2xl">→</div>
                 )}
               </div>
             ))}
