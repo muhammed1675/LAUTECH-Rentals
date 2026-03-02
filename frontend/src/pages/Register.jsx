@@ -5,24 +5,24 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Label } from '../components/ui/label';
-import { Building2, Mail, Lock, User, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Building2, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Register() {
   const navigate = useNavigate();
   const { register } = useAuth();
-
+  
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    
     if (!fullName || !email || !password || !confirmPassword) {
       toast.error('Please fill in all fields');
       return;
@@ -38,53 +38,22 @@ export function Register() {
       return;
     }
 
+    if (!agreedToTerms) {
+      toast.error('Please agree to the Terms & Conditions to continue');
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await register(email, password, fullName);
-
-      if (result?.requiresConfirmation) {
-        // Supabase requires email confirmation — show confirmation screen
-        setEmailSent(true);
-      } else {
-        toast.success('Account created successfully!');
-        navigate('/browse');
-      }
+      await register(email, password, fullName);
+      toast.success('Account created successfully!');
+      navigate('/browse');
     } catch (error) {
       toast.error(error.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
   };
-
-  // Email confirmation sent screen
-  if (emailSent) {
-    return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 className="w-10 h-10 text-green-600" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight mb-2">Check Your Email</h1>
-          <p className="text-muted-foreground mb-4">
-            We sent a confirmation link to <span className="font-medium text-foreground">{email}</span>.
-            Please click the link to activate your account, then come back to sign in.
-          </p>
-          <Button className="w-full h-12" onClick={() => navigate('/login')}>
-            Go to Sign In
-          </Button>
-          <p className="text-xs text-muted-foreground mt-4">
-            Didn't get it? Check your spam folder or{' '}
-            <button
-              className="text-primary underline"
-              onClick={() => setEmailSent(false)}
-            >
-              try again
-            </button>
-          </p>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4" data-testid="register-page">
@@ -98,7 +67,7 @@ export function Register() {
 
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold tracking-tight">Create Account</h1>
-          <p className="text-muted-foreground mt-2">Join Rentora today</p>
+          <p className="text-muted-foreground mt-2">Join LAUTECH Rentals today</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -173,9 +142,34 @@ export function Register() {
             </div>
           </div>
 
+          {/* Terms agreement */}
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border border-border">
+            <input
+              type="checkbox"
+              id="agree-terms"
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-primary cursor-pointer shrink-0"
+            />
+            <label htmlFor="agree-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+              I agree to Rentora's{' '}
+              <a href="/terms" target="_blank" className="text-primary hover:underline font-medium">
+                Terms & Conditions
+              </a>
+              ,{' '}
+              <a href="/terms" target="_blank" className="text-primary hover:underline font-medium">
+                Privacy Policy
+              </a>
+              {' '}and{' '}
+              <a href="/terms" target="_blank" className="text-primary hover:underline font-medium">
+                Refund Policy
+              </a>
+            </label>
+          </div>
+
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || !agreedToTerms}
             className="w-full h-12 active:scale-[0.98] transition-transform"
             data-testid="register-submit"
           >
