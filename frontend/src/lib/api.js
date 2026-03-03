@@ -1,7 +1,12 @@
 import { supabase } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
 
-// ── Email helper via Supabase Edge Function ──
+const generateReference = (prefix) => {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  return `${prefix}-${date}-${uuidv4().slice(0, 8).toUpperCase()}`;
+};
+
+// Email helper via Supabase Edge Function
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
@@ -19,13 +24,6 @@ async function sendEmail(type, to, data) {
     console.warn('Email send failed (non-critical):', e.message);
   }
 }
-
-// Helper to generate payment reference
-const generateReference = (prefix) => {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  return `${prefix}-${date}-${uuidv4().slice(0, 8).toUpperCase()}`;
-};
-
 // ============== PROPERTY APIs ==============
 
 export const propertyAPI = {
@@ -231,7 +229,7 @@ export const propertyAPI = {
         property_id: propertyId
       });
 
-    // Send email with contact details
+    // Send contact details email
     const { data: userRow } = await supabase.from('users').select('email, full_name').eq('id', userId).single();
     if (userRow) {
       await sendEmail('contact_unlocked', userRow.email, {
@@ -587,14 +585,17 @@ export const verificationAPI = {
     }
     
     // Send verification result email
-    const { data: verUser } = await supabase.from('users').select('email, full_name').eq('id', request.user_id).single();
-    if (verUser) {
-      await sendEmail(
-        status === 'approved' ? 'verification_approved' : 'verification_rejected',
-        verUser.email,
-        { name: verUser.full_name }
-      );
+    if (request) {
+      const { data: verUser } = await supabase.from('users').select('email, full_name').eq('id', request.user_id).single();
+      if (verUser) {
+        await sendEmail(
+          status === 'approved' ? 'verification_approved' : 'verification_rejected',
+          verUser.email,
+          { name: verUser.full_name }
+        );
+      }
     }
+
     return { data: { message: `Verification ${status}` } };
   }
 };
@@ -698,75 +699,23 @@ export const adminAPI = {
 
 // ============== PAYMENT APIs ==============
 
-export const paymentAPI = {
-  verify: async (reference) => {
-    // Check token transaction
-    const { data: tokenTx } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-    
-    if (tokenTx) {
-      return {
-        data: {
-          type: 'token_purchase',
-          status: tokenTx.status,
-          amount: tokenTx.amount,
-          tokens: tokenTx.tokens_added
-        }
-      };
-    }
-    
-    // Check inspection transaction
-    const { data: inspTx } = await supabase
-      .from('inspection_transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-    
-    if (inspTx) {
-      return {
-        data: {
-          type: 'inspection',
-          status: inspTx.status,
-          amount: inspTx.amount
-        }
-      };
-    }
-    
-    throw new Error('Transaction not found');
-  },
+// ============== PAYMENT APIs ==============
 
-  // Simulate payment for testing
-  simulate: async (reference) => {
-    // Check token transaction
+export const paymentAPI = {
+  confirmPayment: async (reference) => {
     const { data: tokenTx } = await supabase
       .from('transactions')
       .select('*')
       .eq('reference', reference)
       .single();
-    
+
     if (tokenTx) {
-      await supabase
-        .from('transactions')
-        .update({ status: 'completed' })
-        .eq('reference', reference);
-      
-      // Add tokens to wallet
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('token_balance')
-        .eq('user_id', tokenTx.user_id)
-        .single();
-      
+      await supabase.from('transactions').update({ status: 'completed' }).eq('reference', reference);
+
+      const { data: wallet } = await supabase.from('wallets').select('token_balance').eq('user_id', tokenTx.user_id).single();
       const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
-      await supabase
-        .from('wallets')
-        .update({ token_balance: newBalance })
-        .eq('user_id', tokenTx.user_id);
-      
-      // Send receipt email
+      await supabase.from('wallets').update({ token_balance: newBalance }).eq('user_id', tokenTx.user_id);
+
       const { data: tokenUser } = await supabase.from('users').select('email, full_name').eq('id', tokenTx.user_id).single();
       if (tokenUser) {
         await sendEmail('token_receipt', tokenUser.email, {
@@ -777,28 +726,20 @@ export const paymentAPI = {
           reference: tokenTx.reference,
         });
       }
-      return { data: { message: 'Token payment simulated', tokens_added: tokenTx.tokens_added } };
+
+      return { data: { type: 'token_purchase', tokens_added: tokenTx.tokens_added } };
     }
-    
-    // Check inspection transaction
+
     const { data: inspTx } = await supabase
       .from('inspection_transactions')
       .select('*')
       .eq('reference', reference)
       .single();
-    
+
     if (inspTx) {
-      await supabase
-        .from('inspection_transactions')
-        .update({ status: 'completed' })
-        .eq('reference', reference);
-      
-      await supabase
-        .from('inspections')
-        .update({ payment_status: 'completed', status: 'assigned' })
-        .eq('id', inspTx.inspection_id);
-      
-      // Send inspection confirmation email
+      await supabase.from('inspection_transactions').update({ status: 'completed' }).eq('reference', reference);
+      await supabase.from('inspections').update({ payment_status: 'completed', status: 'assigned' }).eq('id', inspTx.inspection_id);
+
       const { data: inspDetail } = await supabase.from('inspections').select('*').eq('id', inspTx.inspection_id).single();
       if (inspDetail) {
         await sendEmail('inspection_booked', inspDetail.user_email, {
@@ -809,14 +750,13 @@ export const paymentAPI = {
           amount: inspTx.amount,
         });
       }
-      return { data: { message: 'Inspection payment simulated' } };
+
+      return { data: { type: 'inspection' } };
     }
-    
+
     throw new Error('Transaction not found');
   }
 };
-
-// ============== STORAGE APIs ==============
 
 export const storageAPI = {
   uploadImage: async (file, bucket = 'property-images') => {
@@ -839,6 +779,7 @@ export const storageAPI = {
 
 export default {
   propertyAPI,
+  contactAPI,
   walletAPI,
   tokenAPI,
   unlockAPI,
