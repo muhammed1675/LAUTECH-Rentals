@@ -205,6 +205,27 @@ def email_verification_rejected(full_name: str) -> str:
         <a href="mailto:support@rentora.com.ng" class="btn">Contact Support</a>
     """)
 
+def email_contact_unlocked(full_name: str, property_title: str, property_location: str,
+                            property_price: int, contact_name: str, contact_phone: str,
+                            remaining_tokens: int) -> str:
+    formatted_price = f"\u20a6{property_price:,}"
+    return base_template(f"""
+        <span class="badge badge-blue">Contact Unlocked 🔓</span>
+        <h2>You've unlocked a property contact!</h2>
+        <p>Hi {full_name}, here are the owner contact details for the property you just unlocked. Keep this safe.</p>
+        <div class="card">
+            <div class="card-row"><span class="label">🏠 Property</span><span class="value">{property_title}</span></div>
+            <div class="card-row"><span class="label">📍 Location</span><span class="value">{property_location}</span></div>
+            <div class="card-row"><span class="label">💰 Price</span><span class="value">{formatted_price}/year</span></div>
+            <div class="card-row"><span class="label">👤 Contact Name</span><span class="value">{contact_name}</span></div>
+            <div class="card-row"><span class="label">📞 Phone Number</span><span class="value" style="font-size:18px;color:#2563eb;font-weight:700;">{contact_phone}</span></div>
+        </div>
+        <p>You can also view this contact anytime in your profile under <strong>Unlocked Properties</strong>.</p>
+        <p style="font-size:13px;color:#9ca3af;">Tokens remaining in wallet: {remaining_tokens}</p>
+        <a href="https://www.rentora.com.ng/profile" class="btn">View My Unlocked Properties</a>
+        <p style="font-size:12px;color:#9ca3af;margin-top:16px;">Please treat this contact information with respect. Do not share it publicly.</p>
+    """)
+
 # ============== MODELS ==============
 
 class UserCreate(BaseModel):
@@ -719,7 +740,22 @@ async def unlock_property_contact(property_id: str, user: dict = Depends(get_cur
         "unlocked_at": datetime.now(timezone.utc).isoformat()
     }
     supabase_admin.table('unlocks').insert(unlock).execute()
-    
+
+    # Send contact details to user's email
+    await send_email(
+        to_email=user['email'],
+        subject=f"Contact Unlocked: {property_doc['title']} — Rentora",
+        html=email_contact_unlocked(
+            full_name=user['full_name'],
+            property_title=property_doc['title'],
+            property_location=property_doc['location'],
+            property_price=property_doc['price'],
+            contact_name=property_doc['contact_name'],
+            contact_phone=property_doc['contact_phone'],
+            remaining_tokens=new_balance
+        )
+    )
+
     return {
         "message": "Contact unlocked",
         "contact_name": property_doc['contact_name'],
