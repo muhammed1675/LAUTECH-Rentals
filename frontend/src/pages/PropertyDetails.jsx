@@ -8,8 +8,6 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Calendar } from '../components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { 
   MapPin, 
   Phone, 
@@ -21,10 +19,9 @@ import {
   Home,
   Building,
   ChevronLeft,
-  ChevronRight,
+  ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 
 export function PropertyDetails() {
   const { id } = useParams();
@@ -97,7 +94,7 @@ export function PropertyDetails() {
   };
 
   const handleRequestInspection = async () => {
-    if (!inspectionDate) {
+    if (!inspectionDate || inspectionDate === '') {
       toast.error('Please select an inspection date');
       return;
     }
@@ -108,14 +105,13 @@ export function PropertyDetails() {
 
     setRequestingInspection(true);
     try {
-      // Create inspection record + get reference
       const response = await inspectionAPI.request({
         property_id: id,
-        inspection_date: format(inspectionDate, 'yyyy-MM-dd'),
+        inspection_date: inspectionDate,
         email: inspectionEmail,
         phone_number: inspectionPhone,
       }, user);
-
+      
       const { reference } = response.data;
       setShowInspectionDialog(false);
 
@@ -400,23 +396,14 @@ export function PropertyDetails() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Select Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start gap-2" data-testid="inspection-date-picker">
-                    <CalendarIcon className="w-4 h-4" />
-                    {inspectionDate ? format(inspectionDate, 'PPP') : 'Pick a date'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={inspectionDate}
-                    onSelect={setInspectionDate}
-                    disabled={(date) => date < new Date()}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <input
+                type="date"
+                value={inspectionDate || ''}
+                min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                onChange={(e) => setInspectionDate(e.target.value)}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                data-testid="inspection-date-picker"
+              />
             </div>
 
             <div className="space-y-2">
@@ -459,7 +446,12 @@ export function PropertyDetails() {
               className="gap-2"
               data-testid="confirm-inspection-btn"
             >
-              {requestingInspection ? 'Opening payment...' : 'Pay & Schedule'}
+              {requestingInspection ? 'Processing...' : (
+                <>
+                  <ExternalLink className="w-4 h-4" />
+                  Pay & Schedule
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
