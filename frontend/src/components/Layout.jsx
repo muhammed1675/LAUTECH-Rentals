@@ -1,610 +1,420 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { propertyAPI, inspectionAPI } from '../lib/api';
+import { openKorapayCheckout } from '../lib/korapay';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
+import { Calendar } from '../components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { 
-  Home, 
-  Search, 
-  User, 
-  Coins, 
-  LayoutDashboard, 
-  Shield, 
-  LogOut,
-  Menu,
-  X,
-  Building2,
-  ChevronDown,
-  Settings,
-  Users,
-  FileCheck,
-  Receipt,
-  Calendar,
-  Plus,
-  BadgeCheck,
-  MessageSquare,
-  Mail
+  MapPin, Phone, User, Unlock, Calendar as CalendarIcon,
+  ArrowLeft, Home, Building, ChevronLeft, ChevronRight, Shield, Coins
 } from 'lucide-react';
-import { Button } from './ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
-import { Avatar, AvatarFallback } from './ui/avatar';
-import { Badge } from './ui/badge';
-import { useState } from 'react';
-import { ConsentBanner } from './ConsentBanner';
+import { toast } from 'sonner';
 
-export function Layout({ children }) {
-  const { user, logout, isAuthenticated, isAdmin, isAgent } = useAuth();
-  const location = useLocation();
+export function PropertyDetails() {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, isAuthenticated, refreshUser } = useAuth();
+  
+  const [property, setProperty] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [unlocking, setUnlocking] = useState(false);
+  
+  const [showInspectionDialog, setShowInspectionDialog] = useState(false);
+  const [inspectionDate, setInspectionDate] = useState('');
+  const [inspectionEmail, setInspectionEmail] = useState('');
+  const [inspectionPhone, setInspectionPhone] = useState('');
+  const [requestingInspection, setRequestingInspection] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
+  useEffect(() => {
+    fetchProperty();
+  }, [id, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchProperty = async () => {
+    setLoading(true);
+    try {
+      let response;
+      if (isAuthenticated && user) {
+        response = await propertyAPI.getById(id, user.id);
+      } else {
+        response = await propertyAPI.getPublic(id);
+      }
+      setProperty(response.data);
+    } catch (error) {
+      toast.error('Property not found');
+      navigate('/browse');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const isActive = (path) => {
-    if (path === '/') return location.pathname === '/';
-    return location.pathname.startsWith(path);
+  const handleUnlock = async () => {
+    if (!isAuthenticated) { toast.error('Please login to unlock contact'); navigate('/login'); return; }
+    if ((user?.token_balance || 0) < 1) { toast.error('Insufficient tokens. Please buy more.'); navigate('/buy-tokens'); return; }
+    setUnlocking(true);
+    try {
+      const response = await propertyAPI.unlock(id, user.id);
+      toast.success('Contact unlocked!');
+      setProperty({ ...property, contact_unlocked: true, contact_phone: response.data.contact_phone });
+      await refreshUser();
+    } catch (error) {
+      toast.error(error.message || 'Failed to unlock contact');
+    } finally {
+      setUnlocking(false);
+    }
   };
 
-  const getInitials = (name) => {
-    if (!name) return 'U';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const handleRequestInspection = async () => {
+    if (!inspectionDate || inspectionDate === '') { toast.error('Please select an inspection date'); return; }
+    if (!inspectionEmail || !inspectionPhone) { toast.error('Please fill in all fields'); return; }
+
+    setRequestingInspection(true);
+    try {
+      const response = await inspectionAPI.request({
+        property_id: id,
+        inspection_date: inspectionDate,
+        email: inspectionEmail,
+        phone_number: inspectionPhone,
+      }, user);
+
+      const { reference } = response.data;
+      setShowInspectionDialog(false);
+
+      await openKorapayCheckout({
+        reference, amount: 2000, email: inspectionEmail,
+        name: user?.full_name || user?.email,
+        narration: `Inspection Fee — ${property?.title}`,
+        onSuccess: () => { toast.success('Payment confirmed! Inspection scheduled. The agent will contact you soon.'); setRequestingInspection(false); },
+        onFailed: () => { toast.error('Payment was not successful. Please try again.'); setRequestingInspection(false); },
+        onClose: () => { setRequestingInspection(false); },
+      });
+    } catch (error) {
+      toast.error(error.message || 'Failed to request inspection');
+    } finally {
+      setRequestingInspection(false);
+    }
   };
+
+  const formatPrice = (price) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(price);
+  const nextImage = () => property?.images?.length > 1 && setCurrentImageIndex(p => (p + 1) % property.images.length);
+  const prevImage = () => property?.images?.length > 1 && setCurrentImageIndex(p => (p - 1 + property.images.length) % property.images.length);
+
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="animate-pulse">
+          <div className="h-72 md:h-[480px] bg-muted w-full" />
+          <div className="container mx-auto px-4 py-6 space-y-4">
+            <div className="h-8 bg-muted rounded w-2/3" />
+            <div className="h-5 bg-muted rounded w-1/3" />
+            <div className="h-24 bg-muted rounded" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!property) return null;
+
+  const TypeIcon = property.property_type === 'hostel' ? Home : Building;
+  const images = property.images?.length > 0 ? property.images : ['https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg'];
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Desktop Header */}
-      <header className="hidden md:block sticky top-0 z-50 glass border-b">
-        <div className="container mx-auto px-6">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-2">
-              <img src="/rentora-logo.png" alt="Rentora" className="h-9 w-auto" />
-            </Link>
+    <div className="min-h-screen bg-background" data-testid="property-details-page">
 
-            {/* Desktop Nav */}
-            <nav className="flex items-center gap-1">
-              {/* Public Links */}
-              <Link to="/">
-                <Button
-                  variant={isActive('/') && location.pathname === '/' ? 'default' : 'ghost'}
-                  size="sm"
-                  className="gap-2"
-                  data-testid="nav-home"
-                >
-                  <Home className="w-4 h-4" />
-                  Home
-                </Button>
-              </Link>
-              
-              <Link to="/browse">
-                <Button
-                  variant={isActive('/browse') ? 'default' : 'ghost'}
-                  size="sm"
-                  className="gap-2"
-                  data-testid="nav-browse"
-                >
-                  <Search className="w-4 h-4" />
-                  Browse
-                </Button>
-              </Link>
+      {/* ── Hero Image ── */}
+      <div className="relative w-full h-72 md:h-[480px] bg-black overflow-hidden">
+        <img
+          src={images[currentImageIndex]}
+          alt={property.title}
+          className="w-full h-full object-cover opacity-90 transition-all duration-500"
+        />
 
-              {isAuthenticated && (
-                <>
-                  <Link to="/profile">
-                    <Button
-                      variant={isActive('/profile') ? 'default' : 'ghost'}
-                      size="sm"
-                      className="gap-2"
-                      data-testid="nav-profile"
-                    >
-                      <User className="w-4 h-4" />
-                      Profile
-                    </Button>
-                  </Link>
-                  
-                  <Link to="/buy-tokens">
-                    <Button
-                      variant={isActive('/buy-tokens') ? 'default' : 'ghost'}
-                      size="sm"
-                      className="gap-2"
-                      data-testid="nav-tokens"
-                    >
-                      <Coins className="w-4 h-4" />
-                      Tokens
-                    </Button>
-                  </Link>
-                </>
-              )}
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/30" />
 
-              {/* Agent Dropdown */}
-              {isAgent && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant={isActive('/agent') ? 'default' : 'ghost'}
-                      size="sm"
-                      className="gap-2"
-                      data-testid="nav-agent"
-                    >
-                      <Building2 className="w-4 h-4" />
-                      Agent
-                      <ChevronDown className="w-3 h-3 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel className="flex items-center gap-2">
-                      <BadgeCheck className="w-4 h-4 text-secondary" />
-                      Agent Panel
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
-                      <LayoutDashboard className="w-4 h-4 mr-2" />
-                      Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
-                      <Building2 className="w-4 h-4 mr-2" />
-                      My Properties
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Inspections
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer text-primary">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add New Property
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-
-              {/* Admin Dropdown */}
-              {isAdmin && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant={isActive('/admin') ? 'default' : 'ghost'}
-                      size="sm"
-                      className="gap-2"
-                      data-testid="nav-admin"
-                    >
-                      <Shield className="w-4 h-4" />
-                      Admin
-                      <ChevronDown className="w-3 h-3 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-destructive" />
-                      Admin Panel
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
-                      <LayoutDashboard className="w-4 h-4 mr-2" />
-                      Overview
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/admin?tab=users')} className="cursor-pointer">
-                      <Users className="w-4 h-4 mr-2" />
-                      User Management
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/admin?tab=verification')} className="cursor-pointer">
-                      <FileCheck className="w-4 h-4 mr-2" />
-                      Agent Verification
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/admin?tab=properties')} className="cursor-pointer">
-                      <Building2 className="w-4 h-4 mr-2" />
-                      Properties
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/admin?tab=inspections')} className="cursor-pointer">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Inspections
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/admin?tab=transactions')} className="cursor-pointer">
-                      <Receipt className="w-4 h-4 mr-2" />
-                      Transactions
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              
-              {/* User Menu / Auth Buttons */}
-              {isAuthenticated ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="gap-2 ml-2" data-testid="user-menu">
-                      <Avatar className="w-7 h-7">
-                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                          {getInitials(user?.full_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <ChevronDown className="w-3 h-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{user?.full_name}</span>
-                        <span className="text-xs text-muted-foreground">{user?.email}</span>
-                        <Badge variant="outline" className="w-fit mt-1 capitalize text-xs">
-                          {user?.role}
-                        </Badge>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
-                      <User className="w-4 h-4 mr-2" />
-                      My Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/buy-tokens')} className="cursor-pointer">
-                      <Coins className="w-4 h-4 mr-2" />
-                      Buy Tokens
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <div className="flex items-center gap-2 ml-2">
-                  <Link to="/login">
-                    <Button variant="ghost" size="sm" data-testid="nav-login">
-                      Login
-                    </Button>
-                  </Link>
-                  <Link to="/register">
-                    <Button size="sm" data-testid="nav-register">
-                      Register
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </nav>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile Header */}
-      <header className="md:hidden sticky top-0 z-50 glass border-b">
-        <div className="flex items-center justify-between h-14 px-4">
-          <Link to="/" className="flex items-center gap-2">
-            <img src="/rentora-logo.png" alt="Rentora" className="h-8 w-auto" />
-          </Link>
-
-          <div className="flex items-center gap-2">
-            {isAuthenticated && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="mobile-user-menu">
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                        {getInitials(user?.full_name)}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuLabel>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{user?.full_name}</span>
-                      <span className="text-xs text-muted-foreground">{user?.email}</span>
-                      <Badge variant="outline" className="w-fit mt-1 capitalize text-xs">
-                        {user?.role}
-                      </Badge>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  
-                  {isAdmin && (
-                    <>
-                      <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-2">
-                        <Shield className="w-3 h-3" />
-                        Admin Panel
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
-                        <LayoutDashboard className="w-4 h-4 mr-2" />
-                        Admin Dashboard
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate('/admin?tab=users')} className="cursor-pointer">
-                        <Users className="w-4 h-4 mr-2" />
-                        Manage Users
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  
-                  {isAgent && (
-                    <>
-                      <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-2">
-                        <BadgeCheck className="w-3 h-3" />
-                        Agent Panel
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
-                        <LayoutDashboard className="w-4 h-4 mr-2" />
-                        Agent Dashboard
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate('/agent')} className="cursor-pointer">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Property
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  
-                  <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
-                    <User className="w-4 h-4 mr-2" />
-                    My Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/buy-tokens')} className="cursor-pointer">
-                    <Coins className="w-4 h-4 mr-2" />
-                    Buy Tokens
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            
-            {!isAuthenticated && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                data-testid="mobile-menu-toggle"
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile Menu Dropdown for non-authenticated */}
-        {!isAuthenticated && mobileMenuOpen && (
-          <div className="absolute top-14 left-0 right-0 glass border-b p-4 animate-fade-in">
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <Link to="/login" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="outline" className="w-full" data-testid="mobile-login">
-                    Login
-                  </Button>
-                </Link>
-                <Link to="/register" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                  <Button className="w-full" data-testid="mobile-register">
-                    Register
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-      </header>
-
-      {/* Main Content */}
-      <main className="pb-28 md:pb-8">
-        {children}
-      </main>
-
-      {/* Mobile Bottom Nav — Glass Pill */}
-      <nav className="md:hidden fixed bottom-5 left-0 right-0 z-50 flex justify-center px-6">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            padding: '6px',
-            borderRadius: '9999px',
-            background: 'rgba(255,255,255,0.82)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.6)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.13)',
-          }}
+        {/* Back button */}
+        <button
+          onClick={() => navigate('/browse')}
+          className="absolute top-4 left-4 flex items-center gap-1.5 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white px-3 py-2 rounded-full text-sm font-medium transition-all"
+          data-testid="back-btn"
         >
-          <Link to="/" data-testid="mobile-nav-home" style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: location.pathname === '/' ? '6px' : '0',
-              padding: location.pathname === '/' ? '8px 14px' : '9px 11px',
-              borderRadius: '9999px',
-              background: location.pathname === '/' ? 'hsl(var(--primary))' : 'transparent',
-              color: location.pathname === '/' ? 'white' : 'rgba(0,0,0,0.38)',
-              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-            }}>
-              <Home style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-              {location.pathname === '/' && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Home</span>}
-            </div>
-          </Link>
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </button>
 
-          <Link to="/browse" data-testid="mobile-nav-browse" style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: isActive('/browse') ? '6px' : '0',
-              padding: isActive('/browse') ? '8px 14px' : '9px 11px',
-              borderRadius: '9999px',
-              background: isActive('/browse') ? 'hsl(var(--primary))' : 'transparent',
-              color: isActive('/browse') ? 'white' : 'rgba(0,0,0,0.38)',
-              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-            }}>
-              <Search style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-              {isActive('/browse') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Browse</span>}
-            </div>
-          </Link>
-
-          <Link to="/contact" data-testid="mobile-nav-contact" style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: isActive('/contact') ? '6px' : '0',
-              padding: isActive('/contact') ? '8px 14px' : '9px 11px',
-              borderRadius: '9999px',
-              background: isActive('/contact') ? 'hsl(var(--primary))' : 'transparent',
-              color: isActive('/contact') ? 'white' : 'rgba(0,0,0,0.38)',
-              transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-            }}>
-              <MessageSquare style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-              {isActive('/contact') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Contact</span>}
-            </div>
-          </Link>
-
-          {isAuthenticated ? (
-            <>
-              <Link to="/profile" data-testid="mobile-nav-profile" style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: isActive('/profile') ? '6px' : '0',
-                  padding: isActive('/profile') ? '8px 14px' : '9px 11px',
-                  borderRadius: '9999px',
-                  background: isActive('/profile') ? 'hsl(var(--primary))' : 'transparent',
-                  color: isActive('/profile') ? 'white' : 'rgba(0,0,0,0.38)',
-                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                }}>
-                  <User style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-                  {isActive('/profile') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Profile</span>}
-                </div>
-              </Link>
-
-              {isAgent && (
-                <Link to="/agent" data-testid="mobile-nav-agent" style={{ textDecoration: 'none' }}>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: isActive('/agent') ? '6px' : '0',
-                    padding: isActive('/agent') ? '8px 14px' : '9px 11px',
-                    borderRadius: '9999px',
-                    background: isActive('/agent') ? 'hsl(var(--primary))' : 'transparent',
-                    color: isActive('/agent') ? 'white' : 'rgba(0,0,0,0.38)',
-                    transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                  }}>
-                    <Building2 style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-                    {isActive('/agent') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Agent</span>}
-                  </div>
-                </Link>
-              )}
-
-              {isAdmin && (
-                <Link to="/admin" data-testid="mobile-nav-admin" style={{ textDecoration: 'none' }}>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: isActive('/admin') ? '6px' : '0',
-                    padding: isActive('/admin') ? '8px 14px' : '9px 11px',
-                    borderRadius: '9999px',
-                    background: isActive('/admin') ? 'hsl(var(--primary))' : 'transparent',
-                    color: isActive('/admin') ? 'white' : 'rgba(0,0,0,0.38)',
-                    transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                  }}>
-                    <Shield style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-                    {isActive('/admin') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Admin</span>}
-                  </div>
-                </Link>
-              )}
-
-              <Link to="/buy-tokens" data-testid="mobile-nav-tokens" style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: isActive('/buy-tokens') ? '6px' : '0',
-                  padding: isActive('/buy-tokens') ? '8px 14px' : '9px 11px',
-                  borderRadius: '9999px',
-                  background: isActive('/buy-tokens') ? 'hsl(var(--primary))' : 'transparent',
-                  color: isActive('/buy-tokens') ? 'white' : 'rgba(0,0,0,0.38)',
-                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                }}>
-                  <Coins style={{ width: '18px', height: '18px', flexShrink: 0 }} />
-                  {isActive('/buy-tokens') && <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Tokens</span>}
-                </div>
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link to="/login" data-testid="mobile-nav-login" style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center',
-                  padding: '9px 11px', borderRadius: '9999px',
-                  color: 'rgba(0,0,0,0.38)',
-                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                }}>
-                  <User style={{ width: '18px', height: '18px' }} />
-                </div>
-              </Link>
-              <Link to="/register" data-testid="mobile-nav-register" style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 14px', borderRadius: '9999px',
-                  background: 'hsl(var(--primary))', color: 'white',
-                  transition: 'all 0.28s cubic-bezier(0.34,1.56,0.64,1)',
-                }}>
-                  <Plus style={{ width: '18px', height: '18px' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Sign Up</span>
-                </div>
-              </Link>
-            </>
-          )}
+        {/* Type badge */}
+        <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide">
+          <TypeIcon className="w-3.5 h-3.5" />
+          {property.property_type}
         </div>
-      </nav>
 
-      {/* Desktop footer */}
-      <footer className="hidden md:block border-t bg-muted/30 mt-auto">
-        <div className="container mx-auto px-6 py-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <img src="/rentora-logo.png" alt="Rentora" className="h-8 w-auto" />
-              <div>
-                <p className="font-bold text-sm">Rentora</p>
-                <p className="text-xs text-muted-foreground">Student Housing Platform, Ogbomosho</p>
+        {/* Image navigation */}
+        {images.length > 1 && (
+          <>
+            <button onClick={prevImage} className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/40 hover:bg-black/70 backdrop-blur-sm text-white rounded-full flex items-center justify-center transition-all" data-testid="prev-image">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button onClick={nextImage} className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/40 hover:bg-black/70 backdrop-blur-sm text-white rounded-full flex items-center justify-center transition-all" data-testid="next-image">
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            {/* Dot indicators */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {images.map((_, i) => (
+                <button key={i} onClick={() => setCurrentImageIndex(i)}
+                  className={`w-2 h-2 rounded-full transition-all ${i === currentImageIndex ? 'bg-white scale-125' : 'bg-white/50'}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Title overlay at bottom of hero */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6">
+          <h1 className="text-white text-2xl md:text-3xl font-bold leading-tight drop-shadow">{property.title}</h1>
+          <div className="flex items-center gap-1.5 mt-1 text-white/80 text-sm">
+            <MapPin className="w-4 h-4" />
+            <span>{property.location}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Thumbnail strip ── */}
+      {images.length > 1 && (
+        <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide bg-background border-b">
+          {images.map((img, i) => (
+            <button key={i} onClick={() => setCurrentImageIndex(i)}
+              className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${i === currentImageIndex ? 'border-primary' : 'border-transparent opacity-50'}`}
+            >
+              <img src={img} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Main content ── */}
+      <div className="container mx-auto px-4 py-6 max-w-4xl">
+        <div className="grid lg:grid-cols-5 gap-6">
+
+          {/* Left: details */}
+          <div className="lg:col-span-3 space-y-5">
+
+            {/* Price pill */}
+            <div className="inline-flex items-baseline gap-1.5 bg-primary/10 border border-primary/20 rounded-2xl px-4 py-2">
+              <span className="text-3xl font-black text-primary">{formatPrice(property.price)}</span>
+              <span className="text-sm text-muted-foreground font-medium">/year</span>
+            </div>
+
+            {/* Description */}
+            <div className="bg-muted/40 rounded-2xl p-5 border border-border/50">
+              <h2 className="font-semibold text-base mb-3 flex items-center gap-2">
+                <span className="w-1 h-4 bg-primary rounded-full inline-block" />
+                About this property
+              </h2>
+              <p className="text-muted-foreground text-sm leading-relaxed whitespace-pre-wrap">{property.description}</p>
+            </div>
+
+            {/* Listed by */}
+            {property.uploaded_by_agent_name && (
+              <div className="flex items-center gap-3 p-4 bg-muted/30 rounded-2xl border border-border/50">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Shield className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Listed by</p>
+                  <p className="font-semibold text-sm">{property.uploaded_by_agent_name}</p>
+                  <p className="text-xs text-primary font-medium">✓ Verified Agent</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right: action cards */}
+          <div className="lg:col-span-2 space-y-4">
+
+            {/* Contact card */}
+            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+              <div className="bg-primary/5 border-b border-border/50 px-5 py-3">
+                <h3 className="font-semibold text-sm">Owner Contact</h3>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{property.contact_name}</p>
+                    <p className="text-xs text-muted-foreground">Property Owner</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <Phone className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {property.contact_unlocked || property.contact_phone !== '***LOCKED***' ? (
+                      <a href={`tel:${property.contact_phone}`} className="font-bold text-primary hover:underline text-base">
+                        {property.contact_phone}
+                      </a>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground text-sm blur-[3px] select-none">08012345678</span>
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded-full">Locked</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {(!property.contact_unlocked && property.contact_phone === '***LOCKED***') && (
+                  <Button onClick={handleUnlock} disabled={unlocking} className="w-full gap-2 rounded-xl h-11" data-testid="unlock-btn">
+                    {unlocking ? 'Unlocking...' : <><Unlock className="w-4 h-4" />Unlock Contact — 1 Token</>}
+                  </Button>
+                )}
+
+                {property.contact_unlocked && (
+                  <div className="flex items-center justify-center gap-2 py-1 text-green-600 text-sm font-medium">
+                    <Unlock className="w-4 h-4" />
+                    Contact Unlocked
+                  </div>
+                )}
+
+                {!isAuthenticated && (
+                  <p className="text-center text-xs text-muted-foreground">
+                    <button onClick={() => navigate('/login')} className="text-primary hover:underline font-medium">Login</button>
+                    {' '}to unlock contact details
+                  </p>
+                )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-muted-foreground">
-              <Link to="/terms" className="hover:text-primary transition-colors">Terms & Conditions</Link>
-              <Link to="/terms" className="hover:text-primary transition-colors">Privacy Policy</Link>
-              <Link to="/terms" className="hover:text-primary transition-colors">Refund Policy</Link>
-              <Link to="/contact" className="hover:text-primary transition-colors">Contact Us</Link>
+
+            {/* Token balance hint */}
+            {isAuthenticated && (
+              <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 rounded-xl border border-border/50 text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Coins className="w-4 h-4" />
+                  <span>Your balance</span>
+                </div>
+                <span className="font-bold text-primary">{user?.token_balance || 0} tokens</span>
+              </div>
+            )}
+
+            {/* Inspection card */}
+            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+              <div className="bg-primary/5 border-b border-border/50 px-5 py-3">
+                <h3 className="font-semibold text-sm">Book Inspection</h3>
+              </div>
+              <div className="p-5">
+                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                  Schedule a physical visit with our verified agent. A one-time fee of <span className="font-semibold text-foreground">₦2,000</span> is required.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!isAuthenticated) { toast.error('Please login to request inspection'); navigate('/login'); return; }
+                    setInspectionEmail(user?.email || '');
+                    setShowInspectionDialog(true);
+                  }}
+                  className="w-full gap-2 rounded-xl h-11 border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
+                  data-testid="request-inspection-btn"
+                >
+                  <CalendarIcon className="w-4 h-4" />
+                  Schedule Inspection
+                </Button>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()} Rentora. All rights reserved.
-            </p>
+
           </div>
         </div>
-      </footer>
+      </div>
 
-      {/* Mobile footer — above bottom nav (pb-28 gives space for the pill nav) */}
-      <footer className="md:hidden border-t bg-muted/30 pb-28">
-        <div className="px-6 py-5">
-          {/* Brand */}
-          <div className="flex items-center gap-2 mb-4">
-            <img src="/rentora-logo.png" alt="Rentora" className="h-7 w-auto" />
-            <div>
-              <p className="font-bold text-xs">Rentora</p>
-              <p className="text-[10px] text-muted-foreground">Student Housing, Ogbomosho</p>
+      {/* ── Inspection Dialog ── */}
+      <Dialog open={showInspectionDialog} onOpenChange={setShowInspectionDialog}>
+        <DialogContent className="w-[calc(100vw-32px)] max-w-sm mx-auto rounded-2xl p-0 overflow-hidden gap-0">
+
+          {/* Header */}
+          <div className="bg-primary px-5 py-4">
+            <DialogTitle className="text-white text-base font-bold">Book Inspection</DialogTitle>
+            <DialogDescription className="text-primary-foreground/80 text-xs mt-0.5 truncate">
+              {property.title}
+            </DialogDescription>
+          </div>
+
+          <div className="px-5 py-4 space-y-3">
+
+            {/* Date */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</label>
+              <input
+                type="date"
+                value={inspectionDate}
+                min={tomorrow}
+                onChange={(e) => setInspectionDate(e.target.value)}
+                className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                data-testid="inspection-date-picker"
+              />
+              {inspectionDate && (
+                <p className="text-xs text-primary font-medium">
+                  ✓ {new Date(inspectionDate + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
+              )}
+            </div>
+
+            {/* Email */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Email</label>
+              <Input
+                type="email"
+                value={inspectionEmail}
+                onChange={(e) => setInspectionEmail(e.target.value)}
+                placeholder="your@email.com"
+                className="h-11 rounded-xl"
+                data-testid="inspection-email"
+              />
+            </div>
+
+            {/* Phone */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Phone</label>
+              <Input
+                type="tel"
+                value={inspectionPhone}
+                onChange={(e) => setInspectionPhone(e.target.value)}
+                placeholder="080XXXXXXXX"
+                className="h-11 rounded-xl"
+                data-testid="inspection-phone"
+              />
+            </div>
+
+            {/* Fee summary */}
+            <div className="flex items-center justify-between bg-muted/50 rounded-xl px-4 py-3 mt-1">
+              <span className="text-sm text-muted-foreground">Inspection Fee</span>
+              <span className="text-lg font-black text-primary">₦2,000</span>
             </div>
           </div>
 
-          {/* Links grid */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mb-4">
-            <Link to="/terms" className="text-xs text-muted-foreground hover:text-primary transition-colors">
-              Terms & Conditions
-            </Link>
-            <Link to="/terms" className="text-xs text-muted-foreground hover:text-primary transition-colors">
-              Privacy Policy
-            </Link>
-            <Link to="/terms" className="text-xs text-muted-foreground hover:text-primary transition-colors">
-              Refund Policy
-            </Link>
-            <Link to="/contact" className="text-xs text-muted-foreground hover:text-primary transition-colors">
-              Contact Us
-            </Link>
+          {/* Footer buttons */}
+          <div className="flex gap-2 px-5 pb-5">
+            <Button variant="outline" onClick={() => setShowInspectionDialog(false)} className="flex-1 rounded-xl h-11">
+              Cancel
+            </Button>
+            <Button onClick={handleRequestInspection} disabled={requestingInspection} className="flex-1 rounded-xl h-11 gap-2" data-testid="confirm-inspection-btn">
+              {requestingInspection ? 'Opening...' : '💳 Pay & Schedule'}
+            </Button>
           </div>
 
-          <p className="text-[10px] text-muted-foreground">
-            © {new Date().getFullYear()} Rentora. All rights reserved.
-          </p>
-        </div>
-      </footer>
+        </DialogContent>
+      </Dialog>
 
-      {/* Consent Banner */}
-      <ConsentBanner />
     </div>
   );
 }
 
-export default Layout;
+export default PropertyDetails;
