@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { propertyAPI, inspectionAPI } from '../lib/api';
-import { openKorapayCheckout } from '../lib/korapay';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
+import { Calendar } from '../components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { 
   MapPin, 
   Phone, 
@@ -19,9 +20,11 @@ import {
   Home,
   Building,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 export function PropertyDetails() {
   const { id } = useParams();
@@ -112,32 +115,13 @@ export function PropertyDetails() {
         phone_number: inspectionPhone,
       }, user);
       
-      const { reference } = response.data;
+      toast.success('Redirecting to payment...');
       setShowInspectionDialog(false);
-
-      // Open Korapay inline popup
-      await openKorapayCheckout({
-        reference,
-        amount: 2000,
-        email: inspectionEmail,
-        name: user?.full_name || user?.email,
-        narration: `Inspection Fee — ${property?.title}`,
-
-        onSuccess: () => {
-          toast.success('Payment confirmed! Your inspection has been scheduled. The agent will contact you soon.');
-          setRequestingInspection(false);
-        },
-
-        onFailed: () => {
-          toast.error('Payment was not successful. Please try again.');
-          setRequestingInspection(false);
-        },
-
-        onClose: () => {
-          setRequestingInspection(false);
-        },
-      });
-
+      
+      // Open checkout URL
+      if (response.data.checkout_url) {
+        window.open(response.data.checkout_url, '_blank');
+      }
     } catch (error) {
       toast.error(error.message || 'Failed to request inspection');
     } finally {
