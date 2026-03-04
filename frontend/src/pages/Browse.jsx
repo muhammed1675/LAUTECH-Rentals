@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { propertyAPI } from '../lib/api';
 import { PropertyCard, PropertyCardSkeleton } from '../components/PropertyCard';
 import { Button } from '../components/ui/button';
@@ -6,8 +7,63 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Slider } from '../components/ui/slider';
 import { Card } from '../components/ui/card';
-import { Search, SlidersHorizontal, X, Home, Building, RefreshCw } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Home, Building, RefreshCw, Heart, Clock, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
+
+
+// ── localStorage helpers ─────────────────────────────────────────────────
+function getRecentlyViewed() {
+  try { return JSON.parse(localStorage.getItem('rentora_recently_viewed') || '[]'); }
+  catch { return []; }
+}
+function getFavourites() {
+  try { return JSON.parse(localStorage.getItem('rentora_favourites') || '[]'); }
+  catch { return []; }
+}
+function toggleFavourite(id) {
+  const favs = getFavourites();
+  const idx = favs.indexOf(id);
+  if (idx === -1) { favs.push(id); } else { favs.splice(idx, 1); }
+  localStorage.setItem('rentora_favourites', JSON.stringify(favs));
+  return idx === -1;
+}
+
+// ── Mini card for recently viewed ───────────────────────────────────────
+function RecentCard({ item, isFav, onToggleFav }) {
+  const navigate = useNavigate();
+  const formatPrice = (p) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(p);
+  const TypeIcon = item.property_type === 'hostel' ? Home : Building;
+  return (
+    <div
+      onClick={() => navigate(`/property/${item.id}`)}
+      className="shrink-0 w-48 rounded-xl border border-border bg-card overflow-hidden cursor-pointer hover:shadow-md transition-shadow group"
+    >
+      <div className="relative h-28 bg-muted overflow-hidden">
+        {item.image ? (
+          <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-muted">
+            <TypeIcon className="w-8 h-8 text-muted-foreground/40" />
+          </div>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleFav(item.id); }}
+          className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-all ${isFav ? 'bg-red-500 text-white' : 'bg-black/30 text-white hover:bg-black/50'}`}
+        >
+          <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-white' : ''}`} />
+        </button>
+      </div>
+      <div className="p-3">
+        <p className="font-semibold text-xs line-clamp-1">{item.title}</p>
+        <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
+          <MapPin className="w-3 h-3" />
+          <span className="text-xs line-clamp-1">{item.location}</span>
+        </div>
+        <p className="text-primary font-bold text-xs mt-1">{formatPrice(item.price)}/yr</p>
+      </div>
+    </div>
+  );
+}
 
 export function Browse() {
   const [properties, setProperties] = useState([]);
@@ -16,6 +72,9 @@ export function Browse() {
   const [propertyType, setPropertyType] = useState('all');
   const [priceRange, setPriceRange] = useState([0, 500000]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const [favourites, setFavourites] = useState([]);
+  const [showFavsOnly, setShowFavsOnly] = useState(false);
 
   const fetchProperties = async () => {
     setLoading(true);
@@ -39,7 +98,13 @@ export function Browse() {
   const handleApplyFilters = () => { fetchProperties(); setShowFilters(false); };
   const handleResetFilters = () => { setPropertyType('all'); setPriceRange([0, 500000]); setSearchTerm(''); fetchProperties(); };
 
+  const handleToggleFav = (id) => {
+    toggleFavourite(id);
+    setFavourites(getFavourites());
+  };
+
   const filteredProperties = properties.filter(p => {
+    if (showFavsOnly && !favourites.includes(p.id)) return false;
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return p.title.toLowerCase().includes(term) || p.location.toLowerCase().includes(term) || (p.description || '').toLowerCase().includes(term);
@@ -109,8 +174,31 @@ export function Browse() {
         </Card>
       )}
 
+      {/* Recently Viewed */}
+      {recentlyViewed.length > 0 && !showFavsOnly && !searchTerm && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-sm flex items-center gap-2 text-muted-foreground">
+              <Clock className="w-4 h-4" />
+              Recently Viewed
+            </h2>
+            <button
+              onClick={() => { localStorage.removeItem('rentora_recently_viewed'); setRecentlyViewed([]); }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+            {recentlyViewed.map(item => (
+              <RecentCard key={item.id} item={item} isFav={favourites.includes(item.id)} onToggleFav={handleToggleFav} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="text-sm text-foreground/55 font-medium mb-4">
-        {loading ? 'Loading...' : `${filteredProperties.length} properties found`}
+        {loading ? 'Loading...' : showFavsOnly ? `${filteredProperties.length} saved properties` : `${filteredProperties.length} properties found`}
       </p>
 
       {loading ? (
