@@ -3,19 +3,13 @@ import { supabase } from './supabase';
 
 const AuthContext = createContext(null);
 
-// ── Clean error message helper ──────────────────────────────────
 const parseAuthError = (error) => {
   if (!error) return 'Something went wrong. Please try again.';
-  
   const msg = (error.message || error.toString()).toLowerCase();
-
-  // Body stream / fetch / network errors — the main bug being fixed
   if (msg.includes('body stream') || msg.includes('json') || msg.includes('already read'))
     return 'Wrong email or password. Please try again.';
   if (msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch'))
     return 'Network error. Please check your connection and try again.';
-
-  // Auth errors
   if (msg.includes('invalid login credentials') || msg.includes('invalid email or password'))
     return 'Wrong email or password. Please try again.';
   if (msg.includes('user not found') || msg.includes('no user found'))
@@ -30,11 +24,8 @@ const parseAuthError = (error) => {
     return 'Too many attempts. Please wait a moment and try again.';
   if (msg.includes('signup is disabled'))
     return 'New registrations are currently disabled. Contact support.';
-
-  // Return the original message if it's clean enough, else generic
   if (error.message && error.message.length < 100 && !error.message.includes('fetch'))
     return error.message;
-
   return 'Something went wrong. Please try again.';
 };
 
@@ -57,7 +48,6 @@ export function AuthProvider({ children }) {
           .single();
 
         if (error && error.code === 'PGRST116') {
-          // No profile row — create it
           const { data: created } = await supabase
             .from('users')
             .insert({
@@ -104,7 +94,6 @@ export function AuthProvider({ children }) {
       if (s?.user) {
         const profile = await loadUserProfile(s.user);
         if (mounted && profile) {
-          // If suspended, kill the session immediately — even on page refresh
           if (profile.suspended) {
             await supabase.auth.signOut();
             setUser(null);
@@ -137,7 +126,6 @@ export function AuthProvider({ children }) {
         data = result.data;
         error = result.error;
       } catch (fetchErr) {
-        // Wrap raw fetch/stream errors
         throw new Error(parseAuthError(fetchErr));
       }
 
@@ -150,7 +138,6 @@ export function AuthProvider({ children }) {
       const profile = await loadUserProfile(data.user);
 
       if (!profile) {
-        // Fallback: try email lookup
         const { data: found } = await supabase
           .from('users')
           .select('*')
@@ -176,7 +163,6 @@ export function AuthProvider({ children }) {
         throw new Error('Could not load your profile. Please try again in a moment.');
       }
 
-      // Check if user is suspended — block login with clear message
       if (profile.suspended) {
         await supabase.auth.signOut();
         throw new Error('Your account has been suspended. Please contact support for assistance.');
@@ -184,6 +170,39 @@ export function AuthProvider({ children }) {
 
       setUser(profile);
       setSession(data.session);
+
+      // Send sign-in notification email (non-blocking)
+      try {
+        const ip = await fetch('https://api.ipify.org?format=json')
+          .then(r => r.json()).then(d => d.ip).catch(() => 'Unknown');
+        const geo = await fetch(`https://ipapi.co/${ip}/json/`)
+          .then(r => r.json()).catch(() => ({}));
+        const location = geo.city && geo.country_name
+          ? `${geo.city}, ${geo.country_name}`
+          : geo.country_name || 'Unknown';
+        const device = /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent)
+          ? 'Mobile Device' : 'Desktop / Laptop';
+        const time = new Date().toLocaleString('en-NG', {
+          dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos'
+        });
+        const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || '';
+        const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+        await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            type: 'sign_in',
+            to: profile.email,
+            data: { name: profile.full_name, ip, location, device, time }
+          }),
+        });
+      } catch (e) {
+        console.warn('Sign-in email failed (non-critical):', e.message);
+      }
+
       return profile;
     } finally {
       setLoading(false);
@@ -207,7 +226,6 @@ export function AuthProvider({ children }) {
       setSession(data.session);
       return profile;
     } catch (err) {
-      // Re-throw with clean message if not already cleaned
       if (err.message && err.message.length < 120) throw err;
       throw new Error(parseAuthError(err));
     }
