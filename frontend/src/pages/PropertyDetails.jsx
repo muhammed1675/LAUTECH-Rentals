@@ -386,15 +386,15 @@ export function PropertyDetails() {
               <label className="text-sm font-medium">Select Date</label>
               <input
                 type="date"
-                value={inspectionDate}
+                value={inspectionDate || ''}
                 min={tomorrow}
                 onChange={(e) => setInspectionDate(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                 data-testid="inspection-date-picker"
               />
               {inspectionDate && (
-                <p className="text-xs text-primary font-medium mt-1">
-                  ✓ {new Date(inspectionDate + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long' })}
+                <p className="text-xs text-primary font-medium">
+                  ✓ {new Date(inspectionDate + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               )}
             </div>
