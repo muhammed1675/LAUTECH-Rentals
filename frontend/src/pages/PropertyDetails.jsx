@@ -7,8 +7,6 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Calendar } from '../components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { 
   MapPin, 
   Phone, 
@@ -24,7 +22,6 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 
 export function PropertyDetails() {
   const { id } = useParams();
@@ -148,6 +145,13 @@ export function PropertyDetails() {
       setCurrentImageIndex((prev) => (prev - 1 + property.images.length) % property.images.length);
     }
   };
+
+  const tomorrow = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString().split('T')[0];
+  })();
 
   if (loading) {
     return (
@@ -382,12 +386,17 @@ export function PropertyDetails() {
               <label className="text-sm font-medium">Select Date</label>
               <input
                 type="date"
-                value={inspectionDate || ''}
-                min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                value={inspectionDate}
+                min={tomorrow}
                 onChange={(e) => setInspectionDate(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
                 data-testid="inspection-date-picker"
               />
+              {inspectionDate && (
+                <p className="text-xs text-primary font-medium mt-1">
+                  ✓ {new Date(inspectionDate + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
