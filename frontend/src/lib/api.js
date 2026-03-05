@@ -7,25 +7,6 @@ const generateReference = (prefix) => {
   return `${prefix}-${date}-${uuidv4().slice(0, 8).toUpperCase()}`;
 };
 
-// Email helper via Supabase Edge Function
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-
-async function sendEmail(type, to, data) {
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ type, to, data }),
-    });
-  } catch (e) {
-    console.warn('Email send failed (non-critical):', e.message);
-  }
-}
-
 // ============== PROPERTY APIs ==============
 
 export const propertyAPI = {
@@ -67,10 +48,18 @@ export const propertyAPI = {
       .single();
     
     if (error) throw error;
+
+    // Increment view count (non-blocking)
+    supabase
+      .from('properties')
+      .update({ views: (data.views || 0) + 1 })
+      .eq('id', id)
+      .then(() => {});
     
     return {
       data: {
         ...data,
+        views: (data.views || 0) + 1,
         contact_phone: '***LOCKED***',
         contact_unlocked: false
       }
@@ -85,6 +74,13 @@ export const propertyAPI = {
       .single();
     
     if (error) throw error;
+
+    // Increment view count (non-blocking)
+    supabase
+      .from('properties')
+      .update({ views: (property.views || 0) + 1 })
+      .eq('id', id)
+      .then(() => {});
     
     // Check if user has unlocked
     const { data: unlock } = await supabase
@@ -97,10 +93,30 @@ export const propertyAPI = {
     return {
       data: {
         ...property,
+        views: (property.views || 0) + 1,
         contact_unlocked: !!unlock,
         contact_phone: unlock ? property.contact_phone : '***LOCKED***'
       }
     };
+  },
+
+  getSimilar: async (propertyId, propertyType, location, limit = 4) => {
+    const locationWord = location?.split(' ')[0] || '';
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('status', 'approved')
+      .eq('property_type', propertyType)
+      .neq('id', propertyId)
+      .limit(limit * 2);
+    if (error) throw error;
+    const sameLocation = (data || []).filter(p =>
+      p.location?.toLowerCase().includes(locationWord.toLowerCase())
+    );
+    const others = (data || []).filter(p =>
+      !p.location?.toLowerCase().includes(locationWord.toLowerCase())
+    );
+    return { data: [...sameLocation, ...others].slice(0, limit) };
   },
 
   create: async (data, user) => {
@@ -357,6 +373,7 @@ export const inspectionAPI = {
         user_id: user.id,
         user_name: user.full_name,
         user_email: user.email,
+        user_phone: data.phone_number || '',
         property_id: data.property_id,
         property_title: property.title,
         agent_id: property.uploaded_by_agent_id,
@@ -572,18 +589,6 @@ export const verificationAPI = {
         .eq('id', request.user_id);
     }
     
-    // Send verification result email
-    if (request) {
-      const { data: verUser } = await supabase.from('users').select('email, full_name').eq('id', request.user_id).single();
-      if (verUser) {
-        await sendEmail(
-          status === 'approved' ? 'verification_approved' : 'verification_rejected',
-          verUser.email,
-          { name: verUser.full_name }
-        );
-      }
-    }
-
     return { data: { message: `Verification ${status}` } };
   }
 };
@@ -688,106 +693,99 @@ export const adminAPI = {
 // ============== PAYMENT APIs ==============
 
 export const paymentAPI = {
-  confirmPayment: async (reference) => {
-    // Check token transaction first
+  verify: async (reference) => {
+    // Check token transaction
     const { data: tokenTx } = await supabase
       .from('transactions')
       .select('*')
       .eq('reference', reference)
       .single();
-
+    
     if (tokenTx) {
-      await supabase.from('transactions').update({ status: 'completed' }).eq('reference', reference);
-
-      const { data: wallet } = await supabase.from('wallets').select('token_balance').eq('user_id', tokenTx.user_id).single();
-      const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
-      await supabase.from('wallets').update({ token_balance: newBalance }).eq('user_id', tokenTx.user_id);
-
-      // Send receipt email to user
-      const { data: tokenUser } = await supabase.from('users').select('email, full_name').eq('id', tokenTx.user_id).single();
-      if (tokenUser) {
-        await sendEmail('token_receipt', tokenUser.email, {
-          name: tokenUser.full_name,
-          tokens: tokenTx.tokens_added,
+      return {
+        data: {
+          type: 'token_purchase',
+          status: tokenTx.status,
           amount: tokenTx.amount,
-          new_balance: newBalance,
-          reference: tokenTx.reference,
-        });
-      }
-
-      return { data: { type: 'token_purchase', tokens_added: tokenTx.tokens_added } };
+          tokens: tokenTx.tokens_added
+        }
+      };
     }
-
+    
     // Check inspection transaction
     const { data: inspTx } = await supabase
       .from('inspection_transactions')
       .select('*')
       .eq('reference', reference)
       .single();
-
+    
     if (inspTx) {
-      await supabase.from('inspection_transactions').update({ status: 'completed' }).eq('reference', reference);
-      await supabase.from('inspections').update({ payment_status: 'completed', status: 'assigned' }).eq('id', inspTx.inspection_id);
-
-      const { data: inspDetail } = await supabase.from('inspections').select('*').eq('id', inspTx.inspection_id).single();
-      if (inspDetail) {
-        // Email to user — booking confirmed
-        await sendEmail('inspection_booked', inspDetail.user_email, {
-          name: inspDetail.user_name,
-          property_title: inspDetail.property_title,
-          inspection_date: inspDetail.inspection_date,
-          reference: inspTx.reference,
-          amount: inspTx.amount,
-        });
-
-        // Email to agent — user details
-        if (inspDetail.agent_id) {
-          const { data: agentRow } = await supabase.from('users').select('email, full_name').eq('id', inspDetail.agent_id).single();
-          if (agentRow) {
-            await sendEmail('inspection_assigned', agentRow.email, {
-              agent_name: agentRow.full_name,
-              user_name: inspDetail.user_name,
-              user_email: inspDetail.user_email,
-              property_title: inspDetail.property_title,
-              inspection_date: inspDetail.inspection_date,
-              reference: inspTx.reference,
-            });
-          }
+      return {
+        data: {
+          type: 'inspection',
+          status: inspTx.status,
+          amount: inspTx.amount
         }
-      }
-
-      return { data: { type: 'inspection' } };
+      };
     }
+    
+    throw new Error('Transaction not found');
+  },
 
+  // Simulate payment for testing
+  simulate: async (reference) => {
+    // Check token transaction
+    const { data: tokenTx } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+    
+    if (tokenTx) {
+      await supabase
+        .from('transactions')
+        .update({ status: 'completed' })
+        .eq('reference', reference);
+      
+      // Add tokens to wallet
+      const { data: wallet } = await supabase
+        .from('wallets')
+        .select('token_balance')
+        .eq('user_id', tokenTx.user_id)
+        .single();
+      
+      const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
+      await supabase
+        .from('wallets')
+        .update({ token_balance: newBalance })
+        .eq('user_id', tokenTx.user_id);
+      
+      return { data: { message: 'Token payment simulated', tokens_added: tokenTx.tokens_added } };
+    }
+    
+    // Check inspection transaction
+    const { data: inspTx } = await supabase
+      .from('inspection_transactions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+    
+    if (inspTx) {
+      await supabase
+        .from('inspection_transactions')
+        .update({ status: 'completed' })
+        .eq('reference', reference);
+      
+      await supabase
+        .from('inspections')
+        .update({ payment_status: 'completed', status: 'assigned' })
+        .eq('id', inspTx.inspection_id);
+      
+      return { data: { message: 'Inspection payment simulated' } };
+    }
+    
     throw new Error('Transaction not found');
   }
-};
-
-// ============== CONTACT APIs ==============
-
-export const contactAPI = {
-  submit: async (data) => {
-    const { error } = await supabase
-      .from('contact_messages')
-      .insert({ name: data.name, email: data.email, subject: data.subject, message: data.message, status: 'unread' });
-    if (error) throw error;
-    return { data: { message: 'Message submitted' } };
-  },
-  getAll: async () => {
-    const { data, error } = await supabase.from('contact_messages').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    return { data };
-  },
-  markRead: async (id) => {
-    const { error } = await supabase.from('contact_messages').update({ status: 'read' }).eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Marked as read' } };
-  },
-  delete: async (id) => {
-    const { error } = await supabase.from('contact_messages').delete().eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Message deleted' } };
-  },
 };
 
 // ============== STORAGE APIs ==============
@@ -813,7 +811,6 @@ export const storageAPI = {
 
 export default {
   propertyAPI,
-  contactAPI,
   walletAPI,
   tokenAPI,
   unlockAPI,
