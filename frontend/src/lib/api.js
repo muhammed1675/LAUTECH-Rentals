@@ -48,18 +48,10 @@ export const propertyAPI = {
       .single();
     
     if (error) throw error;
-
-    // Increment view count (non-blocking)
-    supabase
-      .from('properties')
-      .update({ views: (data.views || 0) + 1 })
-      .eq('id', id)
-      .then(() => {});
     
     return {
       data: {
         ...data,
-        views: (data.views || 0) + 1,
         contact_phone: '***LOCKED***',
         contact_unlocked: false
       }
@@ -74,13 +66,6 @@ export const propertyAPI = {
       .single();
     
     if (error) throw error;
-
-    // Increment view count (non-blocking)
-    supabase
-      .from('properties')
-      .update({ views: (property.views || 0) + 1 })
-      .eq('id', id)
-      .then(() => {});
     
     // Check if user has unlocked
     const { data: unlock } = await supabase
@@ -93,30 +78,10 @@ export const propertyAPI = {
     return {
       data: {
         ...property,
-        views: (property.views || 0) + 1,
         contact_unlocked: !!unlock,
         contact_phone: unlock ? property.contact_phone : '***LOCKED***'
       }
     };
-  },
-
-  getSimilar: async (propertyId, propertyType, location, limit = 4) => {
-    const locationWord = location?.split(' ')[0] || '';
-    const { data, error } = await supabase
-      .from('properties')
-      .select('*')
-      .eq('status', 'approved')
-      .eq('property_type', propertyType)
-      .neq('id', propertyId)
-      .limit(limit * 2);
-    if (error) throw error;
-    const sameLocation = (data || []).filter(p =>
-      p.location?.toLowerCase().includes(locationWord.toLowerCase())
-    );
-    const others = (data || []).filter(p =>
-      !p.location?.toLowerCase().includes(locationWord.toLowerCase())
-    );
-    return { data: [...sameLocation, ...others].slice(0, limit) };
   },
 
   create: async (data, user) => {
@@ -302,8 +267,9 @@ export const tokenAPI = {
         status: 'pending'
       });
     
-    const koralpayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY || 'pk_test_xxx';
-    const checkoutUrl = `https://checkout.korapay.com/checkout?amount=${amount}&currency=NGN&reference=${reference}&merchant=${koralpayPublicKey}&email=${data.email}`;
+    const korapayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY;
+    const callbackUrl = `${window.location.origin}/payment/callback`;
+    const checkoutUrl = `https://checkout.korapay.com/?amount=${amount}&currency=NGN&reference=${reference}&key=${korapayPublicKey}&customer_email=${encodeURIComponent(data.email)}&redirect_url=${encodeURIComponent(callbackUrl)}`;
     
     return {
       data: {
@@ -373,7 +339,6 @@ export const inspectionAPI = {
         user_id: user.id,
         user_name: user.full_name,
         user_email: user.email,
-        user_phone: data.phone_number || '',
         property_id: data.property_id,
         property_title: property.title,
         agent_id: property.uploaded_by_agent_id,
@@ -396,8 +361,9 @@ export const inspectionAPI = {
         status: 'pending'
       });
     
-    const koralpayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY || 'pk_test_xxx';
-    const checkoutUrl = `https://checkout.korapay.com/checkout?amount=2000&currency=NGN&reference=${reference}&merchant=${koralpayPublicKey}&email=${data.email}`;
+    const korapayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY;
+    const callbackUrl = `${window.location.origin}/payment/callback`;
+    const checkoutUrl = `https://checkout.korapay.com/?amount=2000&currency=NGN&reference=${reference}&key=${korapayPublicKey}&customer_email=${encodeURIComponent(data.email)}&redirect_url=${encodeURIComponent(callbackUrl)}`;
     
     return {
       data: {
@@ -694,41 +660,100 @@ export const adminAPI = {
 
 export const paymentAPI = {
   verify: async (reference) => {
-    // Check token transaction
+    // ── 1. Verify with Korapay API ───────────────────────────────────────────
+    let korapayStatus = null;
+    try {
+      const secretKey = process.env.REACT_APP_KORALPAY_SECRET_KEY;
+      const res = await fetch(`https://api.korapay.com/merchant/api/v1/charges/${reference}`, {
+        headers: {
+          'Authorization': `Bearer ${secretKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const json = await res.json();
+      if (json?.data?.status === 'success') {
+        korapayStatus = 'completed';
+      } else if (json?.data?.status === 'pending') {
+        korapayStatus = 'pending';
+      } else {
+        korapayStatus = 'failed';
+      }
+    } catch (e) {
+      console.error('Korapay verify error:', e);
+    }
+
+    // ── 2. Check token transaction ───────────────────────────────────────────
     const { data: tokenTx } = await supabase
       .from('transactions')
       .select('*')
       .eq('reference', reference)
       .single();
-    
+
     if (tokenTx) {
+      if (korapayStatus === 'completed' && tokenTx.status !== 'completed') {
+        await supabase
+          .from('transactions')
+          .update({ status: 'completed' })
+          .eq('reference', reference);
+
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('token_balance')
+          .eq('user_id', tokenTx.user_id)
+          .single();
+
+        const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
+        await supabase
+          .from('wallets')
+          .update({ token_balance: newBalance })
+          .eq('user_id', tokenTx.user_id);
+      }
+
+      const finalStatus = korapayStatus === 'completed' ? 'completed'
+        : (korapayStatus === 'pending' ? 'pending' : tokenTx.status);
+
       return {
         data: {
           type: 'token_purchase',
-          status: tokenTx.status,
+          status: finalStatus,
           amount: tokenTx.amount,
           tokens: tokenTx.tokens_added
         }
       };
     }
-    
-    // Check inspection transaction
+
+    // ── 3. Check inspection transaction ─────────────────────────────────────
     const { data: inspTx } = await supabase
       .from('inspection_transactions')
       .select('*')
       .eq('reference', reference)
       .single();
-    
+
     if (inspTx) {
+      if (korapayStatus === 'completed' && inspTx.status !== 'completed') {
+        await supabase
+          .from('inspection_transactions')
+          .update({ status: 'completed' })
+          .eq('reference', reference);
+
+        await supabase
+          .from('inspections')
+          .update({ payment_status: 'completed', status: 'assigned' })
+          .eq('id', inspTx.inspection_id);
+      }
+
+      const finalStatus = korapayStatus === 'completed' ? 'completed'
+        : (korapayStatus === 'pending' ? 'pending' : inspTx.status);
+
       return {
         data: {
           type: 'inspection',
-          status: inspTx.status,
+          status: finalStatus,
           amount: inspTx.amount
         }
       };
     }
-    
+
     throw new Error('Transaction not found');
   },
 
@@ -788,98 +813,6 @@ export const paymentAPI = {
   }
 };
 
-
-
-// ============== REVIEW APIs ==============
-
-export const reviewAPI = {
-  getByProperty: async (propertyId) => {
-    const { data, error } = await supabase
-      .from('reviews')
-      .select('*')
-      .eq('property_id', propertyId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return { data };
-  },
-
-  submit: async (data, user) => {
-    // Check if user already reviewed this property
-    const { data: existing } = await supabase
-      .from('reviews')
-      .select('id')
-      .eq('property_id', data.property_id)
-      .eq('user_id', user.id)
-      .single();
-    
-    if (existing) {
-      // Update existing review
-      const { error } = await supabase
-        .from('reviews')
-        .update({ rating: data.rating, comment: data.comment })
-        .eq('id', existing.id);
-      if (error) throw error;
-      return { data: { message: 'Review updated' } };
-    }
-
-    // Insert new review
-    const { error } = await supabase
-      .from('reviews')
-      .insert({
-        id: uuidv4(),
-        property_id: data.property_id,
-        user_id: user.id,
-        user_name: user.full_name,
-        rating: data.rating,
-        comment: data.comment,
-      });
-    if (error) throw error;
-    return { data: { message: 'Review submitted' } };
-  },
-
-  getAll: async () => {
-    const { data, error } = await supabase
-      .from('reviews')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return { data };
-  },
-
-  delete: async (id) => {
-    const { error } = await supabase.from('reviews').delete().eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Review deleted' } };
-  },
-};
-
-// ============== CONTACT APIs ==============
-
-export const contactAPI = {
-  submit: async (data) => {
-    const { error } = await supabase
-      .from('contact_messages')
-      .insert({ name: data.name, email: data.email, subject: data.subject, message: data.message, status: 'unread' });
-    if (error) throw error;
-    return { data: { message: 'Message submitted' } };
-  },
-  getAll: async () => {
-    const { data, error } = await supabase.from('contact_messages').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    return { data };
-  },
-  markRead: async (id) => {
-    const { error } = await supabase.from('contact_messages').update({ status: 'read' }).eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Marked as read' } };
-  },
-  delete: async (id) => {
-    const { error } = await supabase.from('contact_messages').delete().eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Message deleted' } };
-  },
-};
-
 // ============== STORAGE APIs ==============
 
 export const storageAPI = {
@@ -903,8 +836,6 @@ export const storageAPI = {
 
 export default {
   propertyAPI,
-  reviewAPI,
-  contactAPI,
   walletAPI,
   tokenAPI,
   unlockAPI,
