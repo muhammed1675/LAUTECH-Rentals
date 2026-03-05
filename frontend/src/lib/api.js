@@ -267,16 +267,12 @@ export const tokenAPI = {
         status: 'pending'
       });
     
-    const secretKey = process.env.REACT_APP_KORALPAY_SECRET_KEY;
     const callbackUrl = `${window.location.origin}/payment/callback`;
 
-    // Create Korapay charge to get a real checkout URL
-    const koraRes = await fetch('https://api.korapay.com/merchant/api/v1/charges/initialize', {
+    // Call our Vercel serverless function (keeps secret key server-side)
+    const koraRes = await fetch('/api/korapay-init', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${secretKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         reference,
         amount,
@@ -379,16 +375,12 @@ export const inspectionAPI = {
         status: 'pending'
       });
     
-    const secretKey = process.env.REACT_APP_KORALPAY_SECRET_KEY;
     const callbackUrl = `${window.location.origin}/payment/callback`;
 
-    // Create Korapay charge to get a real checkout URL
-    const koraRes = await fetch('https://api.korapay.com/merchant/api/v1/charges/initialize', {
+    // Call our Vercel serverless function (keeps secret key server-side)
+    const koraRes = await fetch('/api/korapay-init', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${secretKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         reference,
         amount: 2000,
@@ -699,13 +691,7 @@ export const paymentAPI = {
     // ── 1. Verify with Korapay API ───────────────────────────────────────────
     let korapayStatus = null;
     try {
-      const secretKey = process.env.REACT_APP_KORALPAY_SECRET_KEY;
-      const res = await fetch(`https://api.korapay.com/merchant/api/v1/charges/${reference}`, {
-        headers: {
-          'Authorization': `Bearer ${secretKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const res = await fetch(`/api/korapay-verify?reference=${reference}`);
       const json = await res.json();
       if (json?.data?.status === 'success') {
         korapayStatus = 'completed';
