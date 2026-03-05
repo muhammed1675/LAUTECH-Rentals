@@ -85,6 +85,10 @@ export function PropertyDetails() {
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [unlocking, setUnlocking] = useState(false);
+  const [isFavourited, setIsFavourited] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [inCompare, setInCompare] = useState(false);
+  const [similarProperties, setSimilarProperties] = useState([]);
   
   // Inspection dialog
   const [showInspectionDialog, setShowInspectionDialog] = useState(false);
