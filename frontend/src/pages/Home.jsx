@@ -55,7 +55,7 @@ export function Home() {
     },
     {
       icon: Shield,
-      title: 'You're Protected',
+      title: "You're Protected",
       desc: 'Every agent on Rentora is ID-verified. If anything goes wrong, our support team is available 24/7.',
       color: 'bg-primary',
     },
