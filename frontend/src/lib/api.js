@@ -789,6 +789,70 @@ export const paymentAPI = {
 };
 
 
+
+// ============== REVIEW APIs ==============
+
+export const reviewAPI = {
+  getByProperty: async (propertyId) => {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('property_id', propertyId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { data };
+  },
+
+  submit: async (data, user) => {
+    // Check if user already reviewed this property
+    const { data: existing } = await supabase
+      .from('reviews')
+      .select('id')
+      .eq('property_id', data.property_id)
+      .eq('user_id', user.id)
+      .single();
+    
+    if (existing) {
+      // Update existing review
+      const { error } = await supabase
+        .from('reviews')
+        .update({ rating: data.rating, comment: data.comment })
+        .eq('id', existing.id);
+      if (error) throw error;
+      return { data: { message: 'Review updated' } };
+    }
+
+    // Insert new review
+    const { error } = await supabase
+      .from('reviews')
+      .insert({
+        id: uuidv4(),
+        property_id: data.property_id,
+        user_id: user.id,
+        user_name: user.full_name,
+        rating: data.rating,
+        comment: data.comment,
+      });
+    if (error) throw error;
+    return { data: { message: 'Review submitted' } };
+  },
+
+  getAll: async () => {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { data };
+  },
+
+  delete: async (id) => {
+    const { error } = await supabase.from('reviews').delete().eq('id', id);
+    if (error) throw error;
+    return { data: { message: 'Review deleted' } };
+  },
+};
+
 // ============== CONTACT APIs ==============
 
 export const contactAPI = {
@@ -839,6 +903,7 @@ export const storageAPI = {
 
 export default {
   propertyAPI,
+  reviewAPI,
   contactAPI,
   walletAPI,
   tokenAPI,
