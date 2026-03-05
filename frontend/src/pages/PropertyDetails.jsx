@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { propertyAPI, inspectionAPI, reviewAPI } from '../lib/api';
+import { propertyAPI, inspectionAPI } from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -19,64 +19,9 @@ import {
   Building,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
-  Heart,
-  Share2,
-  Check,
-  Eye,
-  GitCompare,
-  Star,
-  Send,
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-
-// ── Favourites helpers ───────────────────────────────────────────────────────
-function getFavourites() {
-  try { return JSON.parse(localStorage.getItem('rentora_favourites') || '[]'); }
-  catch { return []; }
-}
-function toggleFavourite(id) {
-  const favs = getFavourites();
-  const idx = favs.indexOf(id);
-  if (idx === -1) { favs.push(id); } else { favs.splice(idx, 1); }
-  localStorage.setItem('rentora_favourites', JSON.stringify(favs));
-  return idx === -1;
-}
-
-// ── Recently viewed tracker ──────────────────────────────────────────────────
-function trackRecentlyViewed(property) {
-  try {
-    const key = 'rentora_recently_viewed';
-    const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    const filtered = existing.filter(p => p.id !== property.id);
-    const updated = [{
-      id: property.id, title: property.title, location: property.location,
-      price: property.price, image: property.images?.[0] || null,
-      property_type: property.property_type,
-    }, ...filtered].slice(0, 10);
-    localStorage.setItem(key, JSON.stringify(updated));
-  } catch {}
-}
-
-// ── Compare helpers (max 2) ──────────────────────────────────────────────────
-function getCompareList() {
-  try { return JSON.parse(localStorage.getItem('rentora_compare') || '[]'); }
-  catch { return []; }
-}
-function toggleCompare(property) {
-  const list = getCompareList();
-  const idx = list.findIndex(p => p.id === property.id);
-  if (idx !== -1) {
-    list.splice(idx, 1);
-    localStorage.setItem('rentora_compare', JSON.stringify(list));
-    return { added: false, full: false };
-  }
-  if (list.length >= 2) return { added: false, full: true };
-  list.push({ id: property.id, title: property.title, location: property.location, price: property.price, image: property.images?.[0] || null, property_type: property.property_type });
-  localStorage.setItem('rentora_compare', JSON.stringify(list));
-  return { added: true, full: false };
-}
 
 export function PropertyDetails() {
   const { id } = useParams();
@@ -87,15 +32,6 @@ export function PropertyDetails() {
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [unlocking, setUnlocking] = useState(false);
-  const [isFavourited, setIsFavourited] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [inCompare, setInCompare] = useState(false);
-  const [similarProperties, setSimilarProperties] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewComment, setReviewComment] = useState('');
-  const [submittingReview, setSubmittingReview] = useState(false);
-  const [hoverRating, setHoverRating] = useState(0);
   
   // Inspection dialog
   const [showInspectionDialog, setShowInspectionDialog] = useState(false);
@@ -118,17 +54,6 @@ export function PropertyDetails() {
         response = await propertyAPI.getPublic(id);
       }
       setProperty(response.data);
-      trackRecentlyViewed(response.data);
-      // Load similar properties
-      try {
-        const sim = await propertyAPI.getSimilar(id, response.data.property_type, response.data.location);
-        setSimilarProperties(sim.data || []);
-      } catch {}
-      // Load reviews
-      try {
-        const rev = await reviewAPI.getByProperty(id);
-        setReviews(rev.data || []);
-      } catch {}
     } catch (error) {
       console.error('Failed to fetch property:', error);
       toast.error('Property not found');
@@ -168,82 +93,6 @@ export function PropertyDetails() {
     }
   };
 
-  const handleFavourite = () => {
-    const added = toggleFavourite(id);
-    setIsFavourited(added);
-    toast.success(added ? '❤️ Added to favourites' : 'Removed from favourites');
-  };
-
-  const handleShare = async () => {
-    const url = window.location.href;
-    const text = `Check out this property on Rentora: ${property?.title} — ${property?.location}`;
-    if (navigator.share) {
-      try { await navigator.share({ title: property?.title, text, url }); } catch {}
-    } else {
-      try {
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        toast.success('Link copied to clipboard!');
-        setTimeout(() => setCopied(false), 2000);
-      } catch { toast.error('Could not copy link'); }
-    }
-  };
-
-  const handleCompare = () => {
-    const result = toggleCompare(property);
-    if (result.full) {
-      toast.error('You can only compare 2 properties. Remove one first.');
-      return;
-    }
-    setInCompare(result.added);
-    if (result.added) {
-      const list = getCompareList();
-      if (list.length === 2) {
-        toast.success('2 properties selected! Click Compare to view side by side.', {
-          action: { label: 'Compare Now', onClick: () => navigate('/compare') }
-        });
-      } else {
-        toast.success('Added to compare. Select one more property.');
-      }
-    } else {
-      toast.success('Removed from compare');
-    }
-  };
-
-  const handleSubmitReview = async () => {
-    if (!isAuthenticated) {
-      toast.error('Please login to leave a review');
-      navigate('/login');
-      return;
-    }
-    if (reviewRating === 0) {
-      toast.error('Please select a star rating');
-      return;
-    }
-    if (!reviewComment.trim()) {
-      toast.error('Please write a comment');
-      return;
-    }
-    setSubmittingReview(true);
-    try {
-      await reviewAPI.submit({
-        property_id: id,
-        rating: reviewRating,
-        comment: reviewComment.trim(),
-      }, user);
-      toast.success('Review submitted!');
-      setReviewRating(0);
-      setReviewComment('');
-      // Reload reviews
-      const rev = await reviewAPI.getByProperty(id);
-      setReviews(rev.data || []);
-    } catch (error) {
-      toast.error(error.message || 'Failed to submit review');
-    } finally {
-      setSubmittingReview(false);
-    }
-  };
-
   const handleRequestInspection = async () => {
     if (!inspectionDate || inspectionDate === '') {
       toast.error('Please select an inspection date');
@@ -262,17 +111,34 @@ export function PropertyDetails() {
         email: inspectionEmail,
         phone_number: inspectionPhone,
       }, user);
-      
-      toast.success('Redirecting to payment...');
+
       setShowInspectionDialog(false);
-      
-      // Open checkout URL
-      if (response.data.checkout_url) {
-        window.open(response.data.checkout_url, '_blank');
-      }
+
+      // Use the same inline Korapay popup as token purchase
+      await openKorapayCheckout({
+        reference: response.data.reference,
+        amount: response.data.amount,
+        email: inspectionEmail,
+        name: user?.full_name || user?.email,
+        narration: `Inspection — ${property?.title}`,
+
+        onSuccess: async () => {
+          toast.success('Inspection booked! Our agent will contact you shortly.');
+          setRequestingInspection(false);
+        },
+
+        onFailed: () => {
+          toast.error('Payment was not successful. Please try again.');
+          setRequestingInspection(false);
+        },
+
+        onClose: () => {
+          setRequestingInspection(false);
+        },
+      });
+
     } catch (error) {
       toast.error(error.message || 'Failed to request inspection');
-    } finally {
       setRequestingInspection(false);
     }
   };
@@ -323,37 +189,16 @@ export function PropertyDetails() {
 
   return (
     <div className="container mx-auto px-4 py-6" data-testid="property-details-page">
-      {/* Back Button + Actions */}
-      <div className="flex items-center justify-between mb-4">
-        <Button variant="ghost" onClick={() => navigate('/browse')} className="gap-2" data-testid="back-btn">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Browse
-        </Button>
-        <div className="flex items-center gap-2">
-          {/* Compare button */}
-          <Button
-            variant="outline" size="sm"
-            onClick={handleCompare}
-            className={`gap-1.5 h-9 text-xs ${inCompare ? 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100' : ''}`}
-            title="Add to compare"
-          >
-            <GitCompare className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{inCompare ? 'In Compare' : 'Compare'}</span>
-          </Button>
-          {/* Share button */}
-          <Button variant="outline" size="icon" onClick={handleShare} className="rounded-full h-9 w-9" title="Share property">
-            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4" />}
-          </Button>
-          {/* Favourite button */}
-          <Button
-            variant="outline" size="icon" onClick={handleFavourite}
-            className={`rounded-full h-9 w-9 transition-all ${isFavourited ? 'bg-red-50 border-red-200 hover:bg-red-100' : ''}`}
-            title={isFavourited ? 'Remove from favourites' : 'Save to favourites'}
-          >
-            <Heart className={`w-4 h-4 ${isFavourited ? 'fill-red-500 text-red-500' : ''}`} />
-          </Button>
-        </div>
-      </div>
+      {/* Back Button */}
+      <Button
+        variant="ghost"
+        onClick={() => navigate('/browse')}
+        className="mb-4 gap-2"
+        data-testid="back-btn"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Browse
+      </Button>
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Main Content */}
@@ -402,19 +247,6 @@ export function PropertyDetails() {
               <TypeIcon className="w-3 h-3" />
               {property.property_type}
             </Badge>
-            {/* View count */}
-            {property.views > 0 && (
-              <div className="absolute bottom-4 right-4 bg-black/50 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                <Eye className="w-3 h-3" />
-                {property.views} {property.views === 1 ? 'view' : 'views'}
-              </div>
-            )}
-            {/* Saved badge */}
-            {isFavourited && (
-              <div className="absolute top-4 right-4 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1">
-                <Heart className="w-3 h-3 fill-white" /> Saved
-              </div>
-            )}
           </div>
 
           {/* Thumbnail Strip */}
@@ -448,124 +280,6 @@ export function PropertyDetails() {
             <h2 className="text-xl font-semibold mb-4">Description</h2>
             <p className="text-muted-foreground whitespace-pre-wrap">{property.description}</p>
           </Card>
-
-          {/* Similar Properties */}
-          {similarProperties.length > 0 && (
-            <div>
-              <h2 className="text-xl font-semibold mb-4">Similar Properties</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {similarProperties.map(sim => (
-                  <div
-                    key={sim.id}
-                    onClick={() => navigate(`/property/${sim.id}`)}
-                    className="flex gap-3 p-3 rounded-xl border border-border bg-card hover:shadow-md transition-shadow cursor-pointer group"
-                  >
-                    <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
-                      <img
-                        src={sim.images?.[0] || 'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg'}
-                        alt={sim.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm line-clamp-1">{sim.title}</p>
-                      <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
-                        <MapPin className="w-3 h-3 shrink-0" />
-                        <span className="text-xs line-clamp-1">{sim.location}</span>
-                      </div>
-                      <p className="text-primary font-bold text-sm mt-1">{formatPrice(sim.price)}<span className="text-xs text-muted-foreground font-normal">/yr</span></p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        {/* Reviews */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">
-              Student Reviews
-              {reviews.length > 0 && (
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  ({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'} · {(reviews.reduce((s,r) => s + r.rating, 0) / reviews.length).toFixed(1)} ★)
-                </span>
-              )}
-            </h2>
-
-            {/* Star input */}
-            {isAuthenticated && (
-              <Card className="p-4 mb-4">
-                <p className="text-sm font-medium mb-2">Leave a Review</p>
-                {/* Stars */}
-                <div className="flex gap-1 mb-3">
-                  {[1,2,3,4,5].map(star => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setReviewRating(star)}
-                      onMouseEnter={() => setHoverRating(star)}
-                      onMouseLeave={() => setHoverRating(0)}
-                      className="transition-transform hover:scale-110"
-                    >
-                      <Star className={`w-7 h-7 ${(hoverRating || reviewRating) >= star ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30'}`} />
-                    </button>
-                  ))}
-                  {reviewRating > 0 && (
-                    <span className="text-sm text-muted-foreground ml-2 self-center">
-                      {['','Poor','Fair','Good','Very Good','Excellent'][reviewRating]}
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Share your experience..."
-                    value={reviewComment}
-                    onChange={(e) => setReviewComment(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSubmitReview()}
-                    className="flex-1"
-                  />
-                  <Button size="icon" onClick={handleSubmitReview} disabled={submittingReview}>
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
-              </Card>
-            )}
-
-            {/* Review list */}
-            {reviews.length > 0 ? (
-              <div className="space-y-3">
-                {reviews.map(review => (
-                  <Card key={review.id} className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <span className="text-xs font-bold text-primary">
-                            {(review.user_name || 'A').charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold">{review.user_name || 'Anonymous'}</p>
-                          <div className="flex gap-0.5 mt-0.5">
-                            {[1,2,3,4,5].map(s => (
-                              <Star key={s} className={`w-3 h-3 ${review.rating >= s ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/20'}`} />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {new Date(review.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{review.comment}</p>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card className="p-6 text-center border-dashed">
-                <Star className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">No reviews yet. Be the first to review!</p>
-              </Card>
-            )}
-          </div>
         </div>
 
         {/* Sidebar */}
