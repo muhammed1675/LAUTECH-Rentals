@@ -18,6 +18,7 @@ import BecomeAgent from "./pages/BecomeAgent";
 import PaymentCallback from "./pages/PaymentCallback";
 import TermsAndPolicies from "./pages/TermsAndPolicies";
 import Contact from "./pages/Contact";
+import { Compare } from './pages/Compare';
 
 // Protected Route wrapper
 function ProtectedRoute({ children, allowedRoles = [] }) {
@@ -53,6 +54,7 @@ function AppRoutes() {
       <Route path="/register" element={<Layout><Register /></Layout>} />
       <Route path="/payment/callback" element={<Layout><PaymentCallback /></Layout>} />
       <Route path="/contact" element={<Layout><Contact /></Layout>} />
+      <Route path="/compare" element={<Compare />} />
 
       {/* Protected Routes - Any authenticated user */}
       <Route
