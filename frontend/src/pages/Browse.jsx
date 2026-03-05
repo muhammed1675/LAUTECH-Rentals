@@ -7,11 +7,11 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Slider } from '../components/ui/slider';
 import { Card } from '../components/ui/card';
-import { Search, SlidersHorizontal, X, Home, Building, RefreshCw, Heart, Clock, MapPin } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Home, Building, RefreshCw, Heart, Clock, MapPin, GitCompare } from 'lucide-react';
 import { toast } from 'sonner';
 
 
-// ── localStorage helpers ─────────────────────────────────────────────────
+// ── localStorage helpers ─────────────────────────────────────────────────────
 function getRecentlyViewed() {
   try { return JSON.parse(localStorage.getItem('rentora_recently_viewed') || '[]'); }
   catch { return []; }
@@ -27,39 +27,34 @@ function toggleFavourite(id) {
   localStorage.setItem('rentora_favourites', JSON.stringify(favs));
   return idx === -1;
 }
+function getCompareList() {
+  try { return JSON.parse(localStorage.getItem('rentora_compare') || '[]'); }
+  catch { return []; }
+}
 
-// ── Mini card for recently viewed ───────────────────────────────────────
+// ── Mini card for recently viewed ────────────────────────────────────────────
 function RecentCard({ item, isFav, onToggleFav }) {
   const navigate = useNavigate();
-  const formatPrice = (p) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(p);
+  const fmt = (p) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(p);
   const TypeIcon = item.property_type === 'hostel' ? Home : Building;
   return (
-    <div
-      onClick={() => navigate(`/property/${item.id}`)}
-      className="shrink-0 w-48 rounded-xl border border-border bg-card overflow-hidden cursor-pointer hover:shadow-md transition-shadow group"
-    >
+    <div onClick={() => navigate(`/property/${item.id}`)} className="shrink-0 w-48 rounded-xl border border-border bg-card overflow-hidden cursor-pointer hover:shadow-md transition-shadow group">
       <div className="relative h-28 bg-muted overflow-hidden">
-        {item.image ? (
-          <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-muted">
-            <TypeIcon className="w-8 h-8 text-muted-foreground/40" />
-          </div>
-        )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleFav(item.id); }}
-          className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-all ${isFav ? 'bg-red-500 text-white' : 'bg-black/30 text-white hover:bg-black/50'}`}
-        >
+        {item.image
+          ? <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          : <div className="w-full h-full flex items-center justify-center bg-muted"><TypeIcon className="w-8 h-8 text-muted-foreground/40" /></div>
+        }
+        <button onClick={(e) => { e.stopPropagation(); onToggleFav(item.id); }}
+          className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-all ${isFav ? 'bg-red-500 text-white' : 'bg-black/30 text-white hover:bg-black/50'}`}>
           <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-white' : ''}`} />
         </button>
       </div>
       <div className="p-3">
         <p className="font-semibold text-xs line-clamp-1">{item.title}</p>
         <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
-          <MapPin className="w-3 h-3" />
-          <span className="text-xs line-clamp-1">{item.location}</span>
+          <MapPin className="w-3 h-3" /><span className="text-xs line-clamp-1">{item.location}</span>
         </div>
-        <p className="text-primary font-bold text-xs mt-1">{formatPrice(item.price)}/yr</p>
+        <p className="text-primary font-bold text-xs mt-1">{fmt(item.price)}/yr</p>
       </div>
     </div>
   );
@@ -75,6 +70,8 @@ export function Browse() {
   const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [favourites, setFavourites] = useState([]);
   const [showFavsOnly, setShowFavsOnly] = useState(false);
+  const [compareList, setCompareList] = useState([]);
+  const navigate = useNavigate();
 
   const fetchProperties = async () => {
     setLoading(true);
@@ -93,15 +90,12 @@ export function Browse() {
     }
   };
 
-  useEffect(() => { fetchProperties(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchProperties(); setRecentlyViewed(getRecentlyViewed()); setFavourites(getFavourites()); setCompareList(getCompareList()); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleApplyFilters = () => { fetchProperties(); setShowFilters(false); };
-  const handleResetFilters = () => { setPropertyType('all'); setPriceRange([0, 500000]); setSearchTerm(''); fetchProperties(); };
+  const handleResetFilters = () => { setPropertyType('all'); setPriceRange([0, 500000]); setSearchTerm(''); setShowFavsOnly(false); fetchProperties(); };
 
-  const handleToggleFav = (id) => {
-    toggleFavourite(id);
-    setFavourites(getFavourites());
-  };
+  const handleToggleFav = (id) => { toggleFavourite(id); setFavourites(getFavourites()); };
 
   const filteredProperties = properties.filter(p => {
     if (showFavsOnly && !favourites.includes(p.id)) return false;
@@ -131,6 +125,31 @@ export function Browse() {
             data-testid="search-input"
           />
         </div>
+        {/* Saved filter button */}
+        <Button
+          variant={showFavsOnly ? 'default' : 'outline'}
+          onClick={() => setShowFavsOnly(!showFavsOnly)}
+          className="h-12 gap-2 border-border/60"
+          title="Show saved properties"
+        >
+          <Heart className={`w-4 h-4 ${showFavsOnly ? 'fill-white' : ''}`} />
+          <span className="hidden sm:inline">Saved</span>
+          {favourites.length > 0 && (
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${showFavsOnly ? 'bg-white/20' : 'bg-primary/10 text-primary'}`}>{favourites.length}</span>
+          )}
+        </Button>
+        {/* Compare button */}
+        {compareList.length > 0 && (
+          <Button
+            variant={compareList.length === 2 ? 'default' : 'outline'}
+            onClick={() => compareList.length === 2 ? navigate('/compare') : null}
+            className="h-12 gap-2 border-border/60"
+          >
+            <GitCompare className="w-4 h-4" />
+            <span className="hidden sm:inline">Compare</span>
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${compareList.length === 2 ? 'bg-white/20' : 'bg-blue-100 text-blue-600'}`}>{compareList.length}/2</span>
+          </Button>
+        )}
         <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="h-12 gap-2 border-border/60" data-testid="filter-toggle">
           <SlidersHorizontal className="w-5 h-5" />
           Filters
@@ -182,10 +201,7 @@ export function Browse() {
               <Clock className="w-4 h-4" />
               Recently Viewed
             </h2>
-            <button
-              onClick={() => { localStorage.removeItem('rentora_recently_viewed'); setRecentlyViewed([]); }}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <button onClick={() => { localStorage.removeItem('rentora_recently_viewed'); setRecentlyViewed([]); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               Clear
             </button>
           </div>
