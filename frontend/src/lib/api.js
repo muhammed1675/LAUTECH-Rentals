@@ -267,10 +267,28 @@ export const tokenAPI = {
         status: 'pending'
       });
     
-    const korapayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY;
+    const secretKey = process.env.REACT_APP_KORALPAY_SECRET_KEY;
     const callbackUrl = `${window.location.origin}/payment/callback`;
-    const checkoutUrl = `https://checkout.korapay.com/?amount=${amount}&currency=NGN&reference=${reference}&key=${korapayPublicKey}&customer_email=${encodeURIComponent(data.email)}&redirect_url=${encodeURIComponent(callbackUrl)}`;
-    
+
+    // Create Korapay charge to get a real checkout URL
+    const koraRes = await fetch('https://api.korapay.com/merchant/api/v1/charges/initialize', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        reference,
+        amount,
+        currency: 'NGN',
+        customer: { email: data.email },
+        redirect_url: callbackUrl,
+        channels: ['card', 'bank_transfer'],
+      }),
+    });
+    const koraJson = await koraRes.json();
+    const checkoutUrl = koraJson?.data?.checkout_url || '';
+
     return {
       data: {
         reference,
@@ -361,9 +379,27 @@ export const inspectionAPI = {
         status: 'pending'
       });
     
-    const korapayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY;
+    const secretKey = process.env.REACT_APP_KORALPAY_SECRET_KEY;
     const callbackUrl = `${window.location.origin}/payment/callback`;
-    const checkoutUrl = `https://checkout.korapay.com/?amount=2000&currency=NGN&reference=${reference}&key=${korapayPublicKey}&customer_email=${encodeURIComponent(data.email)}&redirect_url=${encodeURIComponent(callbackUrl)}`;
+
+    // Create Korapay charge to get a real checkout URL
+    const koraRes = await fetch('https://api.korapay.com/merchant/api/v1/charges/initialize', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        reference,
+        amount: 2000,
+        currency: 'NGN',
+        customer: { email: data.email },
+        redirect_url: callbackUrl,
+        channels: ['card', 'bank_transfer'],
+      }),
+    });
+    const koraJson = await koraRes.json();
+    const checkoutUrl = koraJson?.data?.checkout_url || '';
     
     return {
       data: {
