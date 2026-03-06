@@ -217,8 +217,15 @@ export const propertyAPI = {
       const { data: userForEmail } = await supabase.from('users')
         .select('email, full_name, token_balance').eq('id', userId).single();
       if (userForEmail) {
-        await supabase.functions.invoke('send-payment-email', {
-          body: {
+        await fetch(
+              `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/send-payment-email`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
+                },
+                body: JSON.stringify({
             type: 'contact_unlocked',
             to: userForEmail.email,
             data: {
@@ -230,8 +237,9 @@ export const propertyAPI = {
               contact_phone: property.contact_phone,
               remaining_tokens: (userForEmail.token_balance || 1) - 1,
             },
-          },
-        });
+          }),
+              }
+            );
       }
     } catch (emailErr) {
       console.error('Unlock email failed:', emailErr);
@@ -698,8 +706,15 @@ export const paymentAPI = {
           if (userForEmail) {
             const { data: walletForEmail } = await supabase.from('wallets')
               .select('token_balance').eq('user_id', tokenTx.user_id).single();
-            await supabase.functions.invoke('send-payment-email', {
-              body: {
+            await fetch(
+              `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/send-payment-email`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
+                },
+                body: JSON.stringify({
                 type: 'token_receipt',
                 to: userForEmail.email,
                 data: {
@@ -709,8 +724,9 @@ export const paymentAPI = {
                   new_balance: walletForEmail?.token_balance || tokenTx.tokens_added,
                   reference,
                 },
-              },
-            });
+              }),
+              }
+            );
           }
         } catch (emailErr) {
           console.error('Token receipt email failed:', emailErr);
@@ -747,8 +763,15 @@ export const paymentAPI = {
             .toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
           // Email to client
-          await supabase.functions.invoke('send-payment-email', {
-            body: {
+          await fetch(
+              `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/send-payment-email`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
+                },
+                body: JSON.stringify({
               type: 'inspection_booked',
               to: userForEmail?.email || inspection?.user_email,
               data: {
@@ -758,13 +781,21 @@ export const paymentAPI = {
                 reference,
                 amount: inspTx.amount,
               },
-            },
-          });
+            }),
+              }
+            );
 
           // Email to agent
           if (agentForEmail?.email) {
-            await supabase.functions.invoke('send-payment-email', {
-              body: {
+            await fetch(
+              `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/send-payment-email`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
+                },
+                body: JSON.stringify({
                 type: 'inspection_agent_notify',
                 to: agentForEmail.email,
                 data: {
@@ -775,8 +806,9 @@ export const paymentAPI = {
                   inspection_date: inspDateFormatted,
                   reference,
                 },
-              },
-            });
+              }),
+              }
+            );
           }
         } catch (emailErr) {
           console.error('Inspection email failed:', emailErr);
