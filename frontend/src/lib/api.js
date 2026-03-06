@@ -657,99 +657,58 @@ export const adminAPI = {
 // ============== PAYMENT APIs ==============
 
 export const paymentAPI = {
-  verify: async (reference) => {
-    // Check token transaction
-    const { data: tokenTx } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-    
+  confirmPayment: async (reference) => {
+    console.log('confirmPayment called for:', reference);
+
+    const { data: tokenTx, error: tokenErr } = await supabase
+      .from('transactions').select('*').eq('reference', reference).single();
+    console.log('tokenTx:', tokenTx, 'err:', tokenErr);
+
     if (tokenTx) {
-      return {
-        data: {
-          type: 'token_purchase',
-          status: tokenTx.status,
-          amount: tokenTx.amount,
-          tokens: tokenTx.tokens_added
-        }
-      };
+      if (tokenTx.status !== 'completed') {
+        const { error: e1 } = await supabase.from('transactions')
+          .update({ status: 'completed' }).eq('reference', reference);
+        console.log('tx update err:', e1);
+
+        const { data: wallet, error: e2 } = await supabase.from('wallets')
+          .select('token_balance').eq('user_id', tokenTx.user_id).single();
+        console.log('wallet:', wallet, 'err:', e2);
+
+        const { error: e3 } = await supabase.from('wallets')
+          .update({ token_balance: (wallet?.token_balance || 0) + tokenTx.tokens_added })
+          .eq('user_id', tokenTx.user_id);
+        console.log('wallet update err:', e3);
+      }
+      return { data: { type: 'token_purchase', tokens_added: tokenTx.tokens_added } };
     }
-    
-    // Check inspection transaction
-    const { data: inspTx } = await supabase
-      .from('inspection_transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-    
+
+    const { data: inspTx, error: inspErr } = await supabase
+      .from('inspection_transactions').select('*').eq('reference', reference).single();
+    console.log('inspTx:', inspTx, 'err:', inspErr);
+
     if (inspTx) {
-      return {
-        data: {
-          type: 'inspection',
-          status: inspTx.status,
-          amount: inspTx.amount
-        }
-      };
+      if (inspTx.status !== 'completed') {
+        await supabase.from('inspection_transactions')
+          .update({ status: 'completed' }).eq('reference', reference);
+        await supabase.from('inspections')
+          .update({ payment_status: 'completed', status: 'assigned' })
+          .eq('id', inspTx.inspection_id);
+      }
+      return { data: { type: 'inspection' } };
     }
-    
-    throw new Error('Transaction not found');
+
+    throw new Error('Transaction not found: ' + reference);
   },
 
-  // Simulate payment for testing
-  simulate: async (reference) => {
-    // Check token transaction
-    const { data: tokenTx } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-    
-    if (tokenTx) {
-      await supabase
-        .from('transactions')
-        .update({ status: 'completed' })
-        .eq('reference', reference);
-      
-      // Add tokens to wallet
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('token_balance')
-        .eq('user_id', tokenTx.user_id)
-        .single();
-      
-      const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
-      await supabase
-        .from('wallets')
-        .update({ token_balance: newBalance })
-        .eq('user_id', tokenTx.user_id);
-      
-      return { data: { message: 'Token payment simulated', tokens_added: tokenTx.tokens_added } };
-    }
-    
-    // Check inspection transaction
-    const { data: inspTx } = await supabase
-      .from('inspection_transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-    
-    if (inspTx) {
-      await supabase
-        .from('inspection_transactions')
-        .update({ status: 'completed' })
-        .eq('reference', reference);
-      
-      await supabase
-        .from('inspections')
-        .update({ payment_status: 'completed', status: 'assigned' })
-        .eq('id', inspTx.inspection_id);
-      
-      return { data: { message: 'Inspection payment simulated' } };
-    }
-    
+  verify: async (reference) => {
+    const { data: tokenTx } = await supabase.from('transactions')
+      .select('*').eq('reference', reference).single();
+    if (tokenTx) return { data: { type: 'token_purchase', status: tokenTx.status, amount: tokenTx.amount, tokens: tokenTx.tokens_added } };
+    const { data: inspTx } = await supabase.from('inspection_transactions')
+      .select('*').eq('reference', reference).single();
+    if (inspTx) return { data: { type: 'inspection', status: inspTx.status, amount: inspTx.amount } };
     throw new Error('Transaction not found');
-  }
+  },
 };
 
 // ============== STORAGE APIs ==============
@@ -826,76 +785,6 @@ export const contactAPI = {
     const { error } = await supabase.from('contact_messages').delete().eq('id', id);
     if (error) throw error;
     return { data: { message: 'Message deleted' } };
-  },
-};
-
-// ============== PAYMENT APIs ==============
-
-export const paymentAPI = {
-  // Called by korapay.js after successful payment — updates DB and credits wallet
-  confirmPayment: async (reference) => {
-    console.log('confirmPayment called for:', reference);
-
-    // Check token transaction
-    const { data: tokenTx, error: tokenErr } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-
-    console.log('tokenTx:', tokenTx, 'error:', tokenErr);
-
-    if (tokenTx) {
-      if (tokenTx.status !== 'completed') {
-        const { error: updateErr } = await supabase
-          .from('transactions')
-          .update({ status: 'completed' })
-          .eq('reference', reference);
-        console.log('transaction update error:', updateErr);
-
-        const { data: wallet, error: walletErr } = await supabase
-          .from('wallets')
-          .select('token_balance')
-          .eq('user_id', tokenTx.user_id)
-          .single();
-        console.log('wallet:', wallet, 'error:', walletErr);
-
-        const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
-        const { error: walletUpdateErr } = await supabase
-          .from('wallets')
-          .update({ token_balance: newBalance })
-          .eq('user_id', tokenTx.user_id);
-        console.log('wallet update error:', walletUpdateErr);
-      }
-      return { data: { type: 'token_purchase', tokens_added: tokenTx.tokens_added } };
-    }
-
-    // Check inspection transaction
-    const { data: inspTx, error: inspErr } = await supabase
-      .from('inspection_transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-
-    console.log('inspTx:', inspTx, 'error:', inspErr);
-
-    if (inspTx) {
-      if (inspTx.status !== 'completed') {
-        await supabase.from('inspection_transactions').update({ status: 'completed' }).eq('reference', reference);
-        await supabase.from('inspections').update({ payment_status: 'completed', status: 'assigned' }).eq('id', inspTx.inspection_id);
-      }
-      return { data: { type: 'inspection' } };
-    }
-
-    throw new Error('Transaction not found for reference: ' + reference);
-  },
-
-  verify: async (reference) => {
-    const { data: tokenTx } = await supabase.from('transactions').select('*').eq('reference', reference).single();
-    if (tokenTx) return { data: { type: 'token_purchase', status: tokenTx.status, amount: tokenTx.amount, tokens: tokenTx.tokens_added } };
-    const { data: inspTx } = await supabase.from('inspection_transactions').select('*').eq('reference', reference).single();
-    if (inspTx) return { data: { type: 'inspection', status: inspTx.status, amount: inspTx.amount } };
-    throw new Error('Transaction not found');
   },
 };
 
