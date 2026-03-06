@@ -513,6 +513,10 @@ export const verificationAPI = {
         id_card_url: data.id_card_url,
         selfie_url: data.selfie_url,
         address: data.address,
+        bank_code: data.bank_code || null,
+        bank_name: data.bank_name || null,
+        account_number: data.account_number || null,
+        account_name: data.account_name || null,
         status: 'pending'
       });
     
