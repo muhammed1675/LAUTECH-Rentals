@@ -211,39 +211,6 @@ export const propertyAPI = {
         user_id: userId,
         property_id: propertyId
       });
-
-    // Send unlock confirmation email
-    try {
-      const { data: userForEmail } = await supabase.from('users')
-        .select('email, full_name, token_balance').eq('id', userId).single();
-      if (userForEmail) {
-        await fetch(
-              `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/send-email`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
-                },
-                body: JSON.stringify({
-            type: 'contact_unlocked',
-            to: userForEmail.email,
-            data: {
-              name: userForEmail.full_name,
-              property_title: property.title,
-              property_location: property.location,
-              property_price: property.price,
-              contact_name: property.contact_name,
-              contact_phone: property.contact_phone,
-              remaining_tokens: (userForEmail.token_balance || 1) - 1,
-            },
-          }),
-              }
-            );
-      }
-    } catch (emailErr) {
-      console.error('Unlock email failed:', emailErr);
-    }
     
     return {
       data: {
@@ -300,11 +267,15 @@ export const tokenAPI = {
         status: 'pending'
       });
     
+    const koralpayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY || 'pk_test_xxx';
+    const checkoutUrl = `https://checkout.korapay.com/checkout?amount=${amount}&currency=NGN&reference=${reference}&merchant=${koralpayPublicKey}&email=${data.email}`;
+    
     return {
       data: {
         reference,
         amount,
         quantity: data.quantity,
+        checkout_url: checkoutUrl,
         payment_type: 'token_purchase'
       }
     };
@@ -385,15 +356,19 @@ export const inspectionAPI = {
         inspection_id: inspectionId,
         user_id: user.id,
         reference,
-        amount: 3000,
+        amount: 2000,
         status: 'pending'
       });
+    
+    const koralpayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY || 'pk_test_xxx';
+    const checkoutUrl = `https://checkout.korapay.com/checkout?amount=2000&currency=NGN&reference=${reference}&merchant=${koralpayPublicKey}&email=${data.email}`;
     
     return {
       data: {
         inspection_id: inspectionId,
         reference,
-        amount: 3000,
+        amount: 2000,
+        checkout_url: checkoutUrl,
         payment_type: 'inspection'
       }
     };
@@ -439,6 +414,55 @@ export const inspectionAPI = {
     
     if (error) throw error;
     return { data: { message: 'Inspection updated' } };
+  },
+
+  // Returns agent phone number to the user after payment
+  getAgentContact: async (inspectionId) => {
+    const { data, error } = await supabase
+      .from('inspections')
+      .select('agent_id, agent_name, property_title, inspection_date, payment_status')
+      .eq('id', inspectionId)
+      .single();
+    if (error) throw error;
+    if (data.payment_status !== 'completed') throw new Error('Payment not completed');
+
+    // Get agent's phone from users table
+    const { data: agentUser, error: agentError } = await supabase
+      .from('users')
+      .select('full_name, phone')
+      .eq('id', data.agent_id)
+      .single();
+    if (agentError) throw agentError;
+
+    return {
+      data: {
+        agent_name: agentUser.full_name,
+        agent_phone: agentUser.phone || '',
+        property_title: data.property_title,
+        inspection_date: data.inspection_date,
+      }
+    };
+  },
+
+  // Returns user phone number to the agent
+  getUserContact: async (inspectionId, agentId) => {
+    const { data, error } = await supabase
+      .from('inspections')
+      .select('user_name, user_phone, property_title, inspection_date, agent_id, payment_status')
+      .eq('id', inspectionId)
+      .single();
+    if (error) throw error;
+    if (data.agent_id !== agentId) throw new Error('Not authorized');
+    if (data.payment_status !== 'completed') throw new Error('Payment not completed');
+
+    return {
+      data: {
+        user_name: data.user_name,
+        user_phone: data.user_phone || '',
+        property_title: data.property_title,
+        inspection_date: data.inspection_date,
+      }
+    };
   }
 };
 
@@ -513,10 +537,6 @@ export const verificationAPI = {
         id_card_url: data.id_card_url,
         selfie_url: data.selfie_url,
         address: data.address,
-        bank_code: data.bank_code || null,
-        bank_name: data.bank_name || null,
-        account_number: data.account_number || null,
-        account_name: data.account_name || null,
         status: 'pending'
       });
     
@@ -686,153 +706,100 @@ export const adminAPI = {
 // ============== PAYMENT APIs ==============
 
 export const paymentAPI = {
-  confirmPayment: async (reference) => {
-    // ── Token purchase ───────────────────────────────────────────────────────
-    const { data: tokenTx } = await supabase
-      .from('transactions').select('*').eq('reference', reference).single();
-
-    if (tokenTx) {
-      if (tokenTx.status !== 'completed') {
-        await supabase.from('transactions')
-          .update({ status: 'completed' }).eq('reference', reference);
-
-        const { data: wallet } = await supabase.from('wallets')
-          .select('token_balance').eq('user_id', tokenTx.user_id).single();
-
-        await supabase.from('wallets')
-          .update({ token_balance: (wallet?.token_balance || 0) + tokenTx.tokens_added })
-          .eq('user_id', tokenTx.user_id);
-
-        // Get user details for receipt email
-        try {
-          const { data: userForEmail } = await supabase.from('users')
-            .select('email, full_name').eq('id', tokenTx.user_id).single();
-          if (userForEmail) {
-            const { data: walletForEmail } = await supabase.from('wallets')
-              .select('token_balance').eq('user_id', tokenTx.user_id).single();
-            await fetch(
-              `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/send-email`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
-                },
-                body: JSON.stringify({
-                type: 'token_receipt',
-                to: userForEmail.email,
-                data: {
-                  name: userForEmail.full_name,
-                  tokens: tokenTx.tokens_added,
-                  amount: tokenTx.amount,
-                  new_balance: walletForEmail?.token_balance || tokenTx.tokens_added,
-                  reference,
-                },
-              }),
-              }
-            );
-          }
-        } catch (emailErr) {
-          console.error('Token receipt email failed:', emailErr);
-        }
-      }
-      return { data: { type: 'token_purchase', tokens_added: tokenTx.tokens_added } };
-    }
-
-    // ── Inspection ───────────────────────────────────────────────────────────
-    const { data: inspTx } = await supabase
-      .from('inspection_transactions').select('*').eq('reference', reference).single();
-
-    if (inspTx) {
-      if (inspTx.status !== 'completed') {
-        await supabase.from('inspection_transactions')
-          .update({ status: 'completed' }).eq('reference', reference);
-
-        // Get full inspection details for emails
-        const { data: inspection } = await supabase.from('inspections')
-          .select('*').eq('id', inspTx.inspection_id).single();
-
-        await supabase.from('inspections')
-          .update({ payment_status: 'completed', status: 'assigned' })
-          .eq('id', inspTx.inspection_id);
-
-        // Send emails — client receipt + agent notification
-        try {
-          const { data: userForEmail } = await supabase.from('users')
-            .select('email, full_name').eq('id', inspTx.user_id).single();
-          const { data: agentForEmail } = await supabase.from('users')
-            .select('email, full_name').eq('id', inspection?.agent_id).single();
-
-          const inspDateFormatted = new Date(inspection?.inspection_date + 'T00:00:00')
-            .toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
-          // Email to client
-          await fetch(
-              `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/send-email`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
-                },
-                body: JSON.stringify({
-              type: 'inspection_booked',
-              to: userForEmail?.email || inspection?.user_email,
-              data: {
-                name: userForEmail?.full_name || inspection?.user_name,
-                property_title: inspection?.property_title || 'Property',
-                inspection_date: inspDateFormatted,
-                reference,
-                amount: inspTx.amount,
-              },
-            }),
-              }
-            );
-
-          // Email to agent
-          if (agentForEmail?.email) {
-            await fetch(
-              `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/send-email`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
-                },
-                body: JSON.stringify({
-                type: 'inspection_agent_notify',
-                to: agentForEmail.email,
-                data: {
-                  agent_name: agentForEmail.full_name || inspection?.agent_name,
-                  user_name: userForEmail?.full_name || inspection?.user_name,
-                  user_email: userForEmail?.email || inspection?.user_email,
-                  property_title: inspection?.property_title || 'Property',
-                  inspection_date: inspDateFormatted,
-                  reference,
-                },
-              }),
-              }
-            );
-          }
-        } catch (emailErr) {
-          console.error('Inspection email failed:', emailErr);
-        }
-      }
-      return { data: { type: 'inspection' } };
-    }
-
-    throw new Error('Transaction not found: ' + reference);
-  },
-
   verify: async (reference) => {
-    const { data: tokenTx } = await supabase.from('transactions')
-      .select('*').eq('reference', reference).single();
-    if (tokenTx) return { data: { type: 'token_purchase', status: tokenTx.status, amount: tokenTx.amount, tokens: tokenTx.tokens_added } };
-    const { data: inspTx } = await supabase.from('inspection_transactions')
-      .select('*').eq('reference', reference).single();
-    if (inspTx) return { data: { type: 'inspection', status: inspTx.status, amount: inspTx.amount } };
+    // Check token transaction
+    const { data: tokenTx } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+    
+    if (tokenTx) {
+      return {
+        data: {
+          type: 'token_purchase',
+          status: tokenTx.status,
+          amount: tokenTx.amount,
+          tokens: tokenTx.tokens_added
+        }
+      };
+    }
+    
+    // Check inspection transaction
+    const { data: inspTx } = await supabase
+      .from('inspection_transactions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+    
+    if (inspTx) {
+      return {
+        data: {
+          type: 'inspection',
+          status: inspTx.status,
+          amount: inspTx.amount,
+          inspection_id: inspTx.inspection_id
+        }
+      };
+    }
+    
     throw new Error('Transaction not found');
   },
+
+  // Simulate payment for testing
+  simulate: async (reference) => {
+    // Check token transaction
+    const { data: tokenTx } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+    
+    if (tokenTx) {
+      await supabase
+        .from('transactions')
+        .update({ status: 'completed' })
+        .eq('reference', reference);
+      
+      // Add tokens to wallet
+      const { data: wallet } = await supabase
+        .from('wallets')
+        .select('token_balance')
+        .eq('user_id', tokenTx.user_id)
+        .single();
+      
+      const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
+      await supabase
+        .from('wallets')
+        .update({ token_balance: newBalance })
+        .eq('user_id', tokenTx.user_id);
+      
+      return { data: { message: 'Token payment simulated', tokens_added: tokenTx.tokens_added } };
+    }
+    
+    // Check inspection transaction
+    const { data: inspTx } = await supabase
+      .from('inspection_transactions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+    
+    if (inspTx) {
+      await supabase
+        .from('inspection_transactions')
+        .update({ status: 'completed' })
+        .eq('reference', reference);
+      
+      await supabase
+        .from('inspections')
+        .update({ payment_status: 'completed', status: 'assigned' })
+        .eq('id', inspTx.inspection_id);
+      
+      return { data: { message: 'Inspection payment simulated' } };
+    }
+    
+    throw new Error('Transaction not found');
+  }
 };
 
 // ============== STORAGE APIs ==============
@@ -856,66 +823,8 @@ export const storageAPI = {
   }
 };
 
-// ============== REVIEW APIs ==============
-
-export const reviewAPI = {
-  getByProperty: async (propertyId) => {
-    const { data, error } = await supabase.from('reviews').select('*').eq('property_id', propertyId).order('created_at', { ascending: false });
-    if (error) throw error;
-    return { data };
-  },
-  submit: async (data, user) => {
-    const { data: existing } = await supabase.from('reviews').select('id').eq('property_id', data.property_id).eq('user_id', user.id).single();
-    if (existing) {
-      const { error } = await supabase.from('reviews').update({ rating: data.rating, comment: data.comment }).eq('id', existing.id);
-      if (error) throw error;
-      return { data: { message: 'Review updated' } };
-    }
-    const { error } = await supabase.from('reviews').insert({ id: uuidv4(), property_id: data.property_id, user_id: user.id, user_name: user.full_name, rating: data.rating, comment: data.comment });
-    if (error) throw error;
-    return { data: { message: 'Review submitted' } };
-  },
-  getAll: async () => {
-    const { data, error } = await supabase.from('reviews').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    return { data };
-  },
-  delete: async (id) => {
-    const { error } = await supabase.from('reviews').delete().eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Review deleted' } };
-  },
-};
-
-// ============== CONTACT APIs ==============
-
-export const contactAPI = {
-  submit: async (data) => {
-    const { error } = await supabase.from('contact_messages').insert({ name: data.name, email: data.email, subject: data.subject, message: data.message, status: 'unread' });
-    if (error) throw error;
-    return { data: { message: 'Message submitted' } };
-  },
-  getAll: async () => {
-    const { data, error } = await supabase.from('contact_messages').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    return { data };
-  },
-  markRead: async (id) => {
-    const { error } = await supabase.from('contact_messages').update({ status: 'read' }).eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Marked as read' } };
-  },
-  delete: async (id) => {
-    const { error } = await supabase.from('contact_messages').delete().eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Message deleted' } };
-  },
-};
-
 export default {
   propertyAPI,
-  reviewAPI,
-  contactAPI,
   walletAPI,
   tokenAPI,
   unlockAPI,
