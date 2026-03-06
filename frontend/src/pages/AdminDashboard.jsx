@@ -14,7 +14,7 @@ import {
   LayoutDashboard, Users, Shield, Building2, Calendar, Receipt,
   CheckCircle2, XCircle, Eye, Ban, UserCheck, TrendingUp, Coins,
   Search, RefreshCw, Trash2, AlertTriangle, User, FileText,
-  MessageSquare, Mail, Inbox, MailOpen, UserCog, Copy
+  MessageSquare, Mail, Inbox, MailOpen, UserCog, Copy, Phone
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -747,9 +747,15 @@ export function AdminDashboard() {
             </div>
           )}
           <DialogFooter>
-            <a href={`mailto:${selectedAgent?.email}`} target="_blank" rel="noreferrer">
-              <Button variant="outline" className="gap-2"><Mail className="w-4 h-4" /> Email Agent</Button>
-            </a>
+            {selectedAgent?.phone ? (
+              <a href={`tel:${selectedAgent.phone}`}>
+                <Button variant="outline" className="gap-2"><Phone className="w-4 h-4" /> Call Agent</Button>
+              </a>
+            ) : (
+              <a href={`mailto:${selectedAgent?.email}`} target="_blank" rel="noreferrer">
+                <Button variant="outline" className="gap-2"><Mail className="w-4 h-4" /> Email Agent</Button>
+              </a>
+            )}
             <Button onClick={() => setSelectedAgent(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
