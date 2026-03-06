@@ -385,7 +385,7 @@ export const inspectionAPI = {
         inspection_id: inspectionId,
         user_id: user.id,
         reference,
-        amount: 2000,
+        amount: 3000,
         status: 'pending'
       });
     
@@ -393,7 +393,7 @@ export const inspectionAPI = {
       data: {
         inspection_id: inspectionId,
         reference,
-        amount: 2000,
+        amount: 3000,
         payment_type: 'inspection'
       }
     };
