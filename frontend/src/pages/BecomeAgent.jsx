@@ -8,17 +8,14 @@ import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Shield, Upload, ArrowLeft, CheckCircle2, FileText, Download, Loader2, X, ImageIcon, Building2, CreditCard, User } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Banks loaded dynamically from Korapay — correct codes guaranteed
-
-
-// Fallback bank list in case the API is unavailable
 const FALLBACK_BANKS = [
   { code: '044', name: 'Access Bank' }, { code: '050', name: 'Ecobank Nigeria' },
   { code: '070', name: 'Fidelity Bank' }, { code: '011', name: 'First Bank of Nigeria' },
-  { code: '214', name: 'First City Monument Bank (FCMB)' }, { code: '058', name: 'Guaranty Trust Bank' },
+  { code: '214', name: 'FCMB' }, { code: '058', name: 'Guaranty Trust Bank' },
   { code: '082', name: 'Keystone Bank' }, { code: '526', name: 'Kuda Bank' },
   { code: '090405', name: 'Moniepoint MFB' }, { code: '999992', name: 'OPay' },
   { code: '120001', name: 'PalmPay' }, { code: '076', name: 'Polaris Bank' },
@@ -46,8 +43,8 @@ export function BecomeAgent() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  // Bank details
-  const [banks, setBanks] = useState([]);
+  // Bank state
+  const [banks, setBanks] = useState(FALLBACK_BANKS);
   const [banksLoading, setBanksLoading] = useState(true);
   const [bankCode, setBankCode] = useState('');
   const [bankName, setBankName] = useState('');
@@ -56,23 +53,13 @@ export function BecomeAgent() {
   const [verifyingAccount, setVerifyingAccount] = useState(false);
   const [accountVerified, setAccountVerified] = useState(false);
 
-  // Load banks from Korapay on mount
+  // Load bank list from Korapay via edge function
   useEffect(() => {
     const loadBanks = async () => {
-      setBanksLoading(true);
       try {
-        const { data, error } = await supabase.functions.invoke('resolve-bank', {
-          method: 'GET',
-          headers: { 'x-list-banks': 'true' },
-          body: null,
-        });
-        // supabase.functions.invoke doesn't support GET with query params easily,
-        // so call the URL directly
         const url = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/resolve-bank?list=true`;
         const res = await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
-          },
+          headers: { Authorization: `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}` },
         });
         const json = await res.json();
         if (json.status && Array.isArray(json.data)) {
@@ -80,19 +67,17 @@ export function BecomeAgent() {
             .filter((b) => b.name && b.code)
             .sort((a, b) => a.name.localeCompare(b.name));
           setBanks(sorted);
-        } else {
-          // fallback to a minimal hardcoded list if API fails
-          setBanks(FALLBACK_BANKS);
         }
       } catch (e) {
-        setBanks(FALLBACK_BANKS);
+        // keep fallback
       } finally {
         setBanksLoading(false);
       }
     };
     loadBanks();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Auto-verify when 10 digits entered and bank selected
   useEffect(() => {
     if (accountNumber.length === 10 && bankCode) {
       verifyAccountNumber();
@@ -110,15 +95,13 @@ export function BecomeAgent() {
       const { data, error } = await supabase.functions.invoke('resolve-bank', {
         body: { account_number: accountNumber, bank_code: bankCode },
       });
-
       if (error) throw new Error(error.message);
-
       if (data?.success && data?.account_name) {
         setAccountName(data.account_name);
         setAccountVerified(true);
         toast.success('Account verified!');
       } else {
-        toast.error(data?.message || 'Could not verify account. Check the number and bank.');
+        toast.error(data?.message || 'Could not verify account. Check number and bank.');
       }
     } catch (err) {
       console.error('Bank verify error:', err);
@@ -128,9 +111,9 @@ export function BecomeAgent() {
     }
   };
 
-  const handleBankChange = (e) => {
-    const selected = NIGERIAN_BANKS.find(b => b.code === e.target.value);
-    setBankCode(e.target.value);
+  const handleBankChange = (value) => {
+    const selected = banks.find(b => b.code === value);
+    setBankCode(value);
     setBankName(selected?.name || '');
     setAccountName('');
     setAccountVerified(false);
@@ -161,23 +144,20 @@ export function BecomeAgent() {
     if (!agreementFile) { toast.error('Please upload the signed agreement PDF'); return; }
     if (!address.trim()) { toast.error('Please enter your address'); return; }
     if (!bankCode) { toast.error('Please select your bank'); return; }
-    if (!accountNumber || accountNumber.length !== 10) { toast.error('Please enter a valid 10-digit account number'); return; }
+    if (accountNumber.length !== 10) { toast.error('Please enter a valid 10-digit account number'); return; }
     if (!accountVerified) { toast.error('Please wait for account verification'); return; }
 
     setUploading(true);
     try {
       toast.loading('Uploading documents...', { id: 'upload' });
-
       const [idCardResult, selfieResult, agreementResult] = await Promise.all([
         storageAPI.uploadFile(idCardFile, 'verification/id-cards'),
         storageAPI.uploadFile(selfieFile, 'verification/selfies'),
         storageAPI.uploadFile(agreementFile, 'verification/agreements'),
       ]);
-
       toast.dismiss('upload');
       setUploading(false);
       setLoading(true);
-
       await verificationAPI.request({
         id_card_url: idCardResult.data.url,
         selfie_url: selfieResult.data.url,
@@ -188,7 +168,6 @@ export function BecomeAgent() {
         account_number: accountNumber,
         account_name: accountName,
       }, user);
-
       toast.success('Verification request submitted!');
       setSubmitted(true);
     } catch (error) {
@@ -212,9 +191,7 @@ export function BecomeAgent() {
               <CheckCircle2 className="w-8 h-8 text-green-600" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Request Submitted!</h1>
-            <p className="text-foreground/60 mb-6">
-              Your agent verification request has been submitted. Our admin team will review your documents and get back to you soon.
-            </p>
+            <p className="text-foreground/60 mb-6">Your agent verification request has been submitted. Our admin team will review your documents and get back to you soon.</p>
             <Button onClick={() => navigate('/profile')}>Back to Profile</Button>
           </Card>
         </div>
@@ -244,9 +221,7 @@ export function BecomeAgent() {
             <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0 text-white font-bold text-sm">1</div>
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold">Download & Sign Agreement</h3>
-              <p className="text-sm text-foreground/60 mt-1 mb-3">
-                Download the agent agreement, read it carefully, sign it, and upload the signed copy below.
-              </p>
+              <p className="text-sm text-foreground/60 mt-1 mb-3">Download the agent agreement, read it carefully, sign it, and upload the signed copy below.</p>
               <a href="/agent-agreement.pdf" download="Rentora-Agent-Agreement.pdf"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors">
                 <Download className="w-4 h-4" /> Download Agent Agreement PDF
@@ -288,7 +263,7 @@ export function BecomeAgent() {
             {/* Selfie */}
             <div className="space-y-2">
               <Label>Selfie Holding ID Card <span className="text-destructive">*</span></Label>
-              <p className="text-xs text-foreground/55">A clear photo of you holding your ID card so your face and ID are both visible</p>
+              <p className="text-xs text-foreground/55">A clear photo of you holding your ID card</p>
               <input ref={selfieRef} type="file" accept="image/*" className="hidden"
                 onChange={(e) => handleImageSelect(e, setSelfieFile, setSelfiePreview)} />
               {selfiePreview ? (
@@ -343,7 +318,7 @@ export function BecomeAgent() {
             <div className="space-y-2">
               <Label>Home Address <span className="text-destructive">*</span></Label>
               <Textarea value={address} onChange={(e) => setAddress(e.target.value)}
-                placeholder="Your full address in Ogbomosho..." rows={3} data-testid="address-input" />
+                placeholder="Your full address..." rows={3} data-testid="address-input" />
             </div>
 
             {/* Bank Details */}
@@ -352,28 +327,24 @@ export function BecomeAgent() {
                 <Building2 className="w-4 h-4 text-primary" />
                 <h3 className="font-semibold text-sm">Bank Account Details</h3>
               </div>
-              <p className="text-xs text-foreground/55 -mt-2">
-                Required for receiving inspection payouts. Your account name will be verified automatically.
-              </p>
+              <p className="text-xs text-foreground/55 -mt-2">Required for receiving inspection payouts.</p>
 
               <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5" /> Bank <span className="text-destructive">*</span>
-                </Label>
-                <select value={bankCode} onChange={handleBankChange}
-                  disabled={banksLoading}
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60">
-                  <option value="">{banksLoading ? 'Loading banks...' : 'Select your bank...'}</option>
-                  {banks.map(bank => (
-                    <option key={bank.code} value={bank.code}>{bank.name}</option>
-                  ))}
-                </select>
+                <Label>Bank <span className="text-destructive">*</span></Label>
+                <Select value={bankCode} onValueChange={handleBankChange} disabled={banksLoading}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={banksLoading ? 'Loading banks...' : 'Select your bank...'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {banks.map(bank => (
+                      <SelectItem key={bank.code} value={bank.code}>{bank.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <CreditCard className="w-3.5 h-3.5" /> Account Number <span className="text-destructive">*</span>
-                </Label>
+                <Label>Account Number <span className="text-destructive">*</span></Label>
                 <Input type="text" inputMode="numeric" maxLength={10}
                   value={accountNumber}
                   onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ''))}
@@ -384,16 +355,14 @@ export function BecomeAgent() {
               </div>
 
               <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5" /> Account Name
-                </Label>
+                <Label>Account Name</Label>
                 <div className="relative">
                   <Input readOnly value={accountName}
                     placeholder={verifyingAccount ? 'Verifying...' : 'Auto-detected after entering account number'}
                     className={`pr-10 ${accountVerified ? 'border-green-500 bg-green-50 text-green-800 font-medium' : 'bg-muted/40'}`} />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     {verifyingAccount && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                    {accountVerified && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                    {!verifyingAccount && accountVerified && <CheckCircle2 className="w-4 h-4 text-green-600" />}
                   </div>
                 </div>
                 {accountVerified && (
