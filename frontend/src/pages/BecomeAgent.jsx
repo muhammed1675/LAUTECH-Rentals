@@ -11,33 +11,21 @@ import { Label } from '../components/ui/label';
 import { Shield, Upload, ArrowLeft, CheckCircle2, FileText, Download, Loader2, X, ImageIcon, Building2, CreditCard, User } from 'lucide-react';
 import { toast } from 'sonner';
 
-const NIGERIAN_BANKS = [
-  { code: '044', name: 'Access Bank' },
-  { code: '063', name: 'Access Bank (Diamond)' },
-  { code: '035A', name: 'ALAT by Wema' },
-  { code: '050', name: 'Ecobank Nigeria' },
-  { code: '070', name: 'Fidelity Bank' },
-  { code: '011', name: 'First Bank of Nigeria' },
-  { code: '214', name: 'First City Monument Bank' },
-  { code: '058', name: 'Guaranty Trust Bank' },
-  { code: '030', name: 'Heritage Bank' },
-  { code: '301', name: 'Jaiz Bank' },
-  { code: '082', name: 'Keystone Bank' },
-  { code: '526', name: 'Kuda Bank' },
-  { code: '090405', name: 'Moniepoint MFB' },
-  { code: '076', name: 'Polaris Bank' },
-  { code: '101', name: 'Providus Bank' },
-  { code: '221', name: 'Stanbic IBTC Bank' },
-  { code: '068', name: 'Standard Chartered Bank' },
-  { code: '232', name: 'Sterling Bank' },
-  { code: '032', name: 'Union Bank of Nigeria' },
-  { code: '033', name: 'United Bank for Africa' },
-  { code: '215', name: 'Unity Bank' },
-  { code: '035', name: 'Wema Bank' },
+// Banks loaded dynamically from Korapay — correct codes guaranteed
+
+
+// Fallback bank list in case the API is unavailable
+const FALLBACK_BANKS = [
+  { code: '044', name: 'Access Bank' }, { code: '050', name: 'Ecobank Nigeria' },
+  { code: '070', name: 'Fidelity Bank' }, { code: '011', name: 'First Bank of Nigeria' },
+  { code: '214', name: 'First City Monument Bank (FCMB)' }, { code: '058', name: 'Guaranty Trust Bank' },
+  { code: '082', name: 'Keystone Bank' }, { code: '526', name: 'Kuda Bank' },
+  { code: '090405', name: 'Moniepoint MFB' }, { code: '999992', name: 'OPay' },
+  { code: '120001', name: 'PalmPay' }, { code: '076', name: 'Polaris Bank' },
+  { code: '101', name: 'Providus Bank' }, { code: '221', name: 'Stanbic IBTC Bank' },
+  { code: '232', name: 'Sterling Bank' }, { code: '032', name: 'Union Bank of Nigeria' },
+  { code: '033', name: 'United Bank for Africa (UBA)' }, { code: '035', name: 'Wema Bank' },
   { code: '057', name: 'Zenith Bank' },
-  { code: '120001', name: 'PalmPay' },
-  { code: '999992', name: 'OPay' },
-  { code: '090110', name: 'VFD Microfinance Bank' },
 ];
 
 export function BecomeAgent() {
@@ -59,12 +47,51 @@ export function BecomeAgent() {
   const [submitted, setSubmitted] = useState(false);
 
   // Bank details
+  const [banks, setBanks] = useState([]);
+  const [banksLoading, setBanksLoading] = useState(true);
   const [bankCode, setBankCode] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
   const [verifyingAccount, setVerifyingAccount] = useState(false);
   const [accountVerified, setAccountVerified] = useState(false);
+
+  // Load banks from Korapay on mount
+  useEffect(() => {
+    const loadBanks = async () => {
+      setBanksLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('resolve-bank', {
+          method: 'GET',
+          headers: { 'x-list-banks': 'true' },
+          body: null,
+        });
+        // supabase.functions.invoke doesn't support GET with query params easily,
+        // so call the URL directly
+        const url = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/resolve-bank?list=true`;
+        const res = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
+          },
+        });
+        const json = await res.json();
+        if (json.status && Array.isArray(json.data)) {
+          const sorted = json.data
+            .filter((b) => b.name && b.code)
+            .sort((a, b) => a.name.localeCompare(b.name));
+          setBanks(sorted);
+        } else {
+          // fallback to a minimal hardcoded list if API fails
+          setBanks(FALLBACK_BANKS);
+        }
+      } catch (e) {
+        setBanks(FALLBACK_BANKS);
+      } finally {
+        setBanksLoading(false);
+      }
+    };
+    loadBanks();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (accountNumber.length === 10 && bankCode) {
@@ -316,7 +343,7 @@ export function BecomeAgent() {
             <div className="space-y-2">
               <Label>Home Address <span className="text-destructive">*</span></Label>
               <Textarea value={address} onChange={(e) => setAddress(e.target.value)}
-                placeholder="Your full address in..." rows={3} data-testid="address-input" />
+                placeholder="Your full address in Ogbomosho..." rows={3} data-testid="address-input" />
             </div>
 
             {/* Bank Details */}
@@ -334,9 +361,10 @@ export function BecomeAgent() {
                   <Building2 className="w-3.5 h-3.5" /> Bank <span className="text-destructive">*</span>
                 </Label>
                 <select value={bankCode} onChange={handleBankChange}
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="">Select your bank...</option>
-                  {NIGERIAN_BANKS.map(bank => (
+                  disabled={banksLoading}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60">
+                  <option value="">{banksLoading ? 'Loading banks...' : 'Select your bank...'}</option>
+                  {banks.map(bank => (
                     <option key={bank.code} value={bank.code}>{bank.name}</option>
                   ))}
                 </select>
