@@ -150,7 +150,7 @@ export function PropertyDetails() {
         await navigator.clipboard.writeText(url);
         setCopied(true);
         toast.success('Link copied to clipboard!');
-        setTimeout(() => setCopied(false), 2000);
+        setTimeout(() => setCopied(false), 3000);
       } catch { toast.error('Could not copy link'); }
     }
   };
@@ -484,7 +484,7 @@ export function PropertyDetails() {
 
           <Card className="p-6">
             <h3 className="font-semibold mb-2">Request Inspection</h3>
-            <p className="text-sm text-muted-foreground mb-4">Schedule a physical visit with our verified agent for ₦2,000</p>
+            <p className="text-sm text-muted-foreground mb-4">Schedule a physical visit with our verified agent for ₦3,000</p>
             <Button variant="outline" onClick={() => {
               if (!isAuthenticated) { toast.error('Please login to request inspection'); navigate('/login'); return; }
               setInspectionEmail(user?.email || '');
@@ -509,7 +509,7 @@ export function PropertyDetails() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Request Property Inspection</DialogTitle>
-            <DialogDescription>Schedule a physical inspection with our verified agent. Payment of ₦2,000 is required.</DialogDescription>
+            <DialogDescription>Schedule a physical inspection with our verified agent. Payment of ₦3,000 is required.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -535,7 +535,7 @@ export function PropertyDetails() {
             <Card className="p-4 bg-muted/50">
               <div className="flex justify-between items-center">
                 <span className="font-medium">Inspection Fee</span>
-                <span className="text-xl font-bold text-primary">₦2,000</span>
+                <span className="text-xl font-bold text-primary">₦3,000</span>
               </div>
             </Card>
           </div>
