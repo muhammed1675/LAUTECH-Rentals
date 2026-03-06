@@ -316,7 +316,7 @@ export function BecomeAgent() {
             <div className="space-y-2">
               <Label>Home Address <span className="text-destructive">*</span></Label>
               <Textarea value={address} onChange={(e) => setAddress(e.target.value)}
-                placeholder="Your full address in Ogbomosho..." rows={3} data-testid="address-input" />
+                placeholder="Your full address in..." rows={3} data-testid="address-input" />
             </div>
 
             {/* Bank Details */}
