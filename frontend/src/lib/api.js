@@ -753,6 +753,46 @@ export const paymentAPI = {
 };
 
 
+
+// ============== REVIEW APIs ==============
+
+export const reviewAPI = {
+  submit: async (data, user) => {
+    const { v4: uuidv4 } = await import('uuid');
+    const { error } = await supabase
+      .from('property_reviews')
+      .insert({
+        id: uuidv4(),
+        property_id: data.property_id,
+        user_id: user.id,
+        user_name: user.full_name,
+        rating: data.rating,
+        comment: data.comment,
+      });
+    if (error) throw error;
+    return { data: { message: 'Review submitted' } };
+  },
+
+  getByProperty: async (propertyId) => {
+    const { data, error } = await supabase
+      .from('property_reviews')
+      .select('*')
+      .eq('property_id', propertyId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { data };
+  },
+
+  deleteReview: async (id) => {
+    const { error } = await supabase
+      .from('property_reviews')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return { data: { message: 'Review deleted' } };
+  },
+};
+
 // ============== CONTACT APIs ==============
 
 export const contactAPI = {
@@ -821,6 +861,7 @@ export const storageAPI = {
 
 export default {
   propertyAPI,
+  reviewAPI,
   contactAPI,
   walletAPI,
   tokenAPI,
