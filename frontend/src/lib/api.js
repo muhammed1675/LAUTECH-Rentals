@@ -773,60 +773,30 @@ export const storageAPI = {
   }
 };
 
-
 // ============== REVIEW APIs ==============
 
 export const reviewAPI = {
   getByProperty: async (propertyId) => {
-    const { data, error } = await supabase
-      .from('reviews')
-      .select('*')
-      .eq('property_id', propertyId)
-      .order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('reviews').select('*').eq('property_id', propertyId).order('created_at', { ascending: false });
     if (error) throw error;
     return { data };
   },
-
   submit: async (data, user) => {
-    const { data: existing } = await supabase
-      .from('reviews')
-      .select('id')
-      .eq('property_id', data.property_id)
-      .eq('user_id', user.id)
-      .single();
-
+    const { data: existing } = await supabase.from('reviews').select('id').eq('property_id', data.property_id).eq('user_id', user.id).single();
     if (existing) {
-      const { error } = await supabase
-        .from('reviews')
-        .update({ rating: data.rating, comment: data.comment })
-        .eq('id', existing.id);
+      const { error } = await supabase.from('reviews').update({ rating: data.rating, comment: data.comment }).eq('id', existing.id);
       if (error) throw error;
       return { data: { message: 'Review updated' } };
     }
-
-    const { error } = await supabase
-      .from('reviews')
-      .insert({
-        id: uuidv4(),
-        property_id: data.property_id,
-        user_id: user.id,
-        user_name: user.full_name,
-        rating: data.rating,
-        comment: data.comment,
-      });
+    const { error } = await supabase.from('reviews').insert({ id: uuidv4(), property_id: data.property_id, user_id: user.id, user_name: user.full_name, rating: data.rating, comment: data.comment });
     if (error) throw error;
     return { data: { message: 'Review submitted' } };
   },
-
   getAll: async () => {
-    const { data, error } = await supabase
-      .from('reviews')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('reviews').select('*').order('created_at', { ascending: false });
     if (error) throw error;
     return { data };
   },
-
   delete: async (id) => {
     const { error } = await supabase.from('reviews').delete().eq('id', id);
     if (error) throw error;
@@ -838,31 +808,20 @@ export const reviewAPI = {
 
 export const contactAPI = {
   submit: async (data) => {
-    const { error } = await supabase
-      .from('contact_messages')
-      .insert({ name: data.name, email: data.email, subject: data.subject, message: data.message, status: 'unread' });
+    const { error } = await supabase.from('contact_messages').insert({ name: data.name, email: data.email, subject: data.subject, message: data.message, status: 'unread' });
     if (error) throw error;
     return { data: { message: 'Message submitted' } };
   },
-
   getAll: async () => {
-    const { data, error } = await supabase
-      .from('contact_messages')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('contact_messages').select('*').order('created_at', { ascending: false });
     if (error) throw error;
     return { data };
   },
-
   markRead: async (id) => {
-    const { error } = await supabase
-      .from('contact_messages')
-      .update({ status: 'read' })
-      .eq('id', id);
+    const { error } = await supabase.from('contact_messages').update({ status: 'read' }).eq('id', id);
     if (error) throw error;
     return { data: { message: 'Marked as read' } };
   },
-
   delete: async (id) => {
     const { error } = await supabase.from('contact_messages').delete().eq('id', id);
     if (error) throw error;
@@ -870,8 +829,80 @@ export const contactAPI = {
   },
 };
 
+// ============== PAYMENT APIs ==============
+
+export const paymentAPI = {
+  // Called by korapay.js after successful payment — updates DB and credits wallet
+  confirmPayment: async (reference) => {
+    console.log('confirmPayment called for:', reference);
+
+    // Check token transaction
+    const { data: tokenTx, error: tokenErr } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+
+    console.log('tokenTx:', tokenTx, 'error:', tokenErr);
+
+    if (tokenTx) {
+      if (tokenTx.status !== 'completed') {
+        const { error: updateErr } = await supabase
+          .from('transactions')
+          .update({ status: 'completed' })
+          .eq('reference', reference);
+        console.log('transaction update error:', updateErr);
+
+        const { data: wallet, error: walletErr } = await supabase
+          .from('wallets')
+          .select('token_balance')
+          .eq('user_id', tokenTx.user_id)
+          .single();
+        console.log('wallet:', wallet, 'error:', walletErr);
+
+        const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
+        const { error: walletUpdateErr } = await supabase
+          .from('wallets')
+          .update({ token_balance: newBalance })
+          .eq('user_id', tokenTx.user_id);
+        console.log('wallet update error:', walletUpdateErr);
+      }
+      return { data: { type: 'token_purchase', tokens_added: tokenTx.tokens_added } };
+    }
+
+    // Check inspection transaction
+    const { data: inspTx, error: inspErr } = await supabase
+      .from('inspection_transactions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+
+    console.log('inspTx:', inspTx, 'error:', inspErr);
+
+    if (inspTx) {
+      if (inspTx.status !== 'completed') {
+        await supabase.from('inspection_transactions').update({ status: 'completed' }).eq('reference', reference);
+        await supabase.from('inspections').update({ payment_status: 'completed', status: 'assigned' }).eq('id', inspTx.inspection_id);
+      }
+      return { data: { type: 'inspection' } };
+    }
+
+    throw new Error('Transaction not found for reference: ' + reference);
+  },
+
+  verify: async (reference) => {
+    const { data: tokenTx } = await supabase.from('transactions').select('*').eq('reference', reference).single();
+    if (tokenTx) return { data: { type: 'token_purchase', status: tokenTx.status, amount: tokenTx.amount, tokens: tokenTx.tokens_added } };
+    const { data: inspTx } = await supabase.from('inspection_transactions').select('*').eq('reference', reference).single();
+    if (inspTx) return { data: { type: 'inspection', status: inspTx.status, amount: inspTx.amount } };
+    throw new Error('Transaction not found');
+  },
+};
+
 export default {
   propertyAPI,
+  reviewAPI,
+  contactAPI,
   walletAPI,
   tokenAPI,
   unlockAPI,
