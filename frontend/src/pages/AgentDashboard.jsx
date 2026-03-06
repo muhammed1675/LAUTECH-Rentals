@@ -15,6 +15,19 @@ import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building,
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 
+// Fallback banks if Korapay API is unavailable
+const AGENT_FALLBACK_BANKS = [
+  { code: '044', name: 'Access Bank' }, { code: '050', name: 'Ecobank Nigeria' },
+  { code: '070', name: 'Fidelity Bank' }, { code: '011', name: 'First Bank of Nigeria' },
+  { code: '214', name: 'FCMB' }, { code: '058', name: 'Guaranty Trust Bank' },
+  { code: '082', name: 'Keystone Bank' }, { code: '526', name: 'Kuda Bank' },
+  { code: '090405', name: 'Moniepoint MFB' }, { code: '999992', name: 'OPay' },
+  { code: '120001', name: 'PalmPay' }, { code: '076', name: 'Polaris Bank' },
+  { code: '221', name: 'Stanbic IBTC Bank' }, { code: '232', name: 'Sterling Bank' },
+  { code: '032', name: 'Union Bank' }, { code: '033', name: 'UBA' },
+  { code: '035', name: 'Wema Bank' }, { code: '057', name: 'Zenith Bank' },
+];
+
 // ── Lightbox ────────────────────────────────────────────────────
 function Lightbox({ images, startIndex, onClose }) {
   const [current, setCurrent] = useState(startIndex);
@@ -81,6 +94,8 @@ export function AgentDashboard() {
   const [lightbox, setLightbox] = useState({ open: false, images: [], index: 0 });
 
   // Bank details
+  const [banks, setBanks] = useState([]);
+  const [banksLoading, setBanksLoading] = useState(true);
   const [bankDetails, setBankDetails] = useState(null);
   const [editingBank, setEditingBank] = useState(false);
   const [bankForm, setBankForm] = useState({ bank_code: '', bank_name: '', account_number: '', account_name: '' });
@@ -88,21 +103,7 @@ export function AgentDashboard() {
   const [accountVerified, setAccountVerified] = useState(false);
   const [savingBank, setSavingBank] = useState(false);
 
-  const NIGERIAN_BANKS = [
-    { code: '044', name: 'Access Bank' }, { code: '063', name: 'Access Bank (Diamond)' },
-    { code: '035A', name: 'ALAT by Wema' }, { code: '050', name: 'Ecobank Nigeria' },
-    { code: '070', name: 'Fidelity Bank' }, { code: '011', name: 'First Bank of Nigeria' },
-    { code: '214', name: 'First City Monument Bank' }, { code: '058', name: 'Guaranty Trust Bank' },
-    { code: '030', name: 'Heritage Bank' }, { code: '301', name: 'Jaiz Bank' },
-    { code: '082', name: 'Keystone Bank' }, { code: '526', name: 'Kuda Bank' },
-    { code: '090405', name: 'Moniepoint MFB' }, { code: '076', name: 'Polaris Bank' },
-    { code: '101', name: 'Providus Bank' }, { code: '221', name: 'Stanbic IBTC Bank' },
-    { code: '232', name: 'Sterling Bank' }, { code: '032', name: 'Union Bank of Nigeria' },
-    { code: '033', name: 'United Bank for Africa' }, { code: '215', name: 'Unity Bank' },
-    { code: '035', name: 'Wema Bank' }, { code: '057', name: 'Zenith Bank' },
-    { code: '120001', name: 'PalmPay' }, { code: '999992', name: 'OPay' },
-    { code: '090110', name: 'VFD Microfinance Bank' },
-  ];
+  // Banks loaded dynamically — see loadBanks()
 
   const [formData, setFormData] = useState({
     title: '', description: '', price: '', location: '',
@@ -132,6 +133,24 @@ export function AgentDashboard() {
     }
   };
 
+  // Load banks from Korapay (correct codes guaranteed)
+  const loadBanks = async () => {
+    setBanksLoading(true);
+    try {
+      const url = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/resolve-bank?list=true`;
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}` },
+      });
+      const json = await res.json();
+      if (json.status && Array.isArray(json.data)) {
+        setBanks(json.data.filter(b => b.name && b.code).sort((a, b) => a.name.localeCompare(b.name)));
+      } else {
+        setBanks(AGENT_FALLBACK_BANKS);
+      }
+    } catch (e) { setBanks(AGENT_FALLBACK_BANKS); }
+    finally { setBanksLoading(false); }
+  };
+
   // Load bank details from approved verification record
   const fetchBankDetails = async () => {
     if (!user) return;
@@ -157,8 +176,8 @@ export function AgentDashboard() {
     }
   }, [bankForm.account_number, bankForm.bank_code, editingBank]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch bank details on mount
-  useEffect(() => { if (user) fetchBankDetails(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Fetch bank details and bank list on mount
+  useEffect(() => { if (user) { fetchBankDetails(); loadBanks(); } }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleVerifyAccount = async () => {
     setVerifyingAccount(true);
@@ -572,10 +591,10 @@ export function AgentDashboard() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Bank <span className="text-destructive">*</span></Label>
-                  <Select value={bankForm.bank_code} onValueChange={handleBankCodeChange}>
-                    <SelectTrigger><SelectValue placeholder="Select your bank..." /></SelectTrigger>
+                  <Select value={bankForm.bank_code} onValueChange={handleBankCodeChange} disabled={banksLoading}>
+                    <SelectTrigger><SelectValue placeholder={banksLoading ? "Loading banks..." : "Select your bank..."} /></SelectTrigger>
                     <SelectContent>
-                      {NIGERIAN_BANKS.map(bank => (
+                      {banks.map(bank => (
                         <SelectItem key={bank.code} value={bank.code}>{bank.name}</SelectItem>
                       ))}
                     </SelectContent>
