@@ -59,7 +59,7 @@ export function Home() {
   const features = [
     { icon: Shield, title: 'Verified Properties', description: 'All listings are reviewed and approved by our admin team for quality assurance.' },
     { icon: Coins, title: 'Token System', description: 'Buy tokens to unlock owner contacts. ₦1,000 per token, simple and transparent.' },
-    { icon: Calendar, title: 'Request Inspections', description: 'Schedule property visits with our verified agents for just ₦2,000.' },
+    { icon: Calendar, title: 'Request Inspections', description: 'Schedule property visits with our verified agents for just ₦3,000.' },
     { icon: Users, title: 'Trusted Agents', description: 'Our agents are ID-verified and accountable for the properties they list.' },
   ];
 
