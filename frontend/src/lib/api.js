@@ -406,6 +406,45 @@ export const inspectionAPI = {
     return { data };
   },
 
+  getAgentContact: async (inspectionId) => {
+    const { data: inspection, error } = await supabase
+      .from('inspections')
+      .select('agent_id, agent_name, property_title, inspection_date')
+      .eq('id', inspectionId)
+      .single();
+
+    if (error || !inspection) throw new Error('Inspection not found');
+
+    let agentPhone = null;
+    if (inspection.agent_id) {
+      const { data: agentUser } = await supabase
+        .from('users')
+        .select('phone')
+        .eq('id', inspection.agent_id)
+        .single();
+      if (agentUser?.phone) {
+        agentPhone = agentUser.phone;
+      } else {
+        const { data: verifReq } = await supabase
+          .from('agent_verification_requests')
+          .select('agent_phone')
+          .eq('user_id', inspection.agent_id)
+          .eq('status', 'approved')
+          .single();
+        agentPhone = verifReq?.agent_phone || null;
+      }
+    }
+
+    return {
+      data: {
+        agent_name: inspection.agent_name,
+        agent_phone: agentPhone,
+        property_title: inspection.property_title,
+        inspection_date: inspection.inspection_date,
+      }
+    };
+  },
+
   update: async (id, updateData) => {
     const { error } = await supabase
       .from('inspections')
@@ -493,6 +532,7 @@ export const verificationAPI = {
         bank_name: data.bank_name || null,
         account_number: data.account_number || null,
         account_name: data.account_name || null,
+        agent_phone: data.agent_phone || null,
         status: 'pending'
       });
     
@@ -689,11 +729,42 @@ export const paymentAPI = {
       .single();
     
     if (inspTx) {
+      // Get inspection details to return agent info
+      const { data: inspection } = await supabase
+        .from('inspections')
+        .select('agent_name, agent_id, property_title')
+        .eq('id', inspTx.inspection_id)
+        .single();
+      // Get agent phone from agent_bank_details or users
+      let agentPhone = null;
+      if (inspection?.agent_id) {
+        const { data: agentUser } = await supabase
+          .from('users')
+          .select('phone')
+          .eq('id', inspection.agent_id)
+          .single();
+        // Fallback: check verification request
+        if (!agentUser?.phone) {
+          const { data: verifReq } = await supabase
+            .from('agent_verification_requests')
+            .select('agent_phone')
+            .eq('user_id', inspection.agent_id)
+            .eq('status', 'approved')
+            .single();
+          agentPhone = verifReq?.agent_phone || null;
+        } else {
+          agentPhone = agentUser.phone;
+        }
+      }
       return {
         data: {
           type: 'inspection',
           status: inspTx.status,
-          amount: inspTx.amount
+          amount: inspTx.amount,
+          inspection_id: inspTx.inspection_id,
+          agent_name: inspection?.agent_name || null,
+          agent_phone: agentPhone,
+          property_title: inspection?.property_title || null,
         }
       };
     }
