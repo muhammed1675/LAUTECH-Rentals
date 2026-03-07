@@ -9,7 +9,7 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Shield, Upload, ArrowLeft, CheckCircle2, FileText, Download, Loader2, X, ImageIcon, Building2, CreditCard, User } from 'lucide-react';
+import { Shield, Upload, ArrowLeft, CheckCircle2, FileText, Download, Loader2, X, ImageIcon, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FALLBACK_BANKS = [
@@ -105,7 +105,9 @@ export function BecomeAgent() {
       }
     } catch (err) {
       console.error('Bank verify error:', err);
-      toast.error('Account verification failed. Please check details.');
+      toast.error('Account verification failed. You can still submit — admin will verify manually.');
+      // Allow manual entry if auto-verify fails
+      setAccountVerified(false);
     } finally {
       setVerifyingAccount(false);
     }
@@ -145,7 +147,7 @@ export function BecomeAgent() {
     if (!address.trim()) { toast.error('Please enter your address'); return; }
     if (!bankCode) { toast.error('Please select your bank'); return; }
     if (accountNumber.length !== 10) { toast.error('Please enter a valid 10-digit account number'); return; }
-    if (!accountVerified) { toast.error('Please wait for account verification'); return; }
+    if (!accountName.trim()) { toast.error('Please enter your account name'); return; }
 
     setUploading(true);
     try {
@@ -166,7 +168,7 @@ export function BecomeAgent() {
         bank_code: bankCode,
         bank_name: bankName,
         account_number: accountNumber,
-        account_name: accountName,
+        account_name: accountName.trim().toUpperCase(),
       }, user);
       toast.success('Verification request submitted!');
       setSubmitted(true);
@@ -191,7 +193,7 @@ export function BecomeAgent() {
               <CheckCircle2 className="w-8 h-8 text-green-600" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Request Submitted!</h1>
-            <p className="text-foreground/60 mb-6">Your agent verification request has been submitted. Our admin team will review your documents and get back to you soon.</p>
+            <p className="text-foreground/60 mb-6">Your agent verification request has been submitted including your bank account details. Our admin team will review your documents and get back to you soon.</p>
             <Button onClick={() => navigate('/profile')}>Back to Profile</Button>
           </Card>
         </div>
@@ -327,7 +329,9 @@ export function BecomeAgent() {
                 <Building2 className="w-4 h-4 text-primary" />
                 <h3 className="font-semibold text-sm">Bank Account Details</h3>
               </div>
-              <p className="text-xs text-foreground/55 -mt-2">Required for receiving inspection payouts.</p>
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                ⚠ Your account name <strong>must match</strong> the name on your ID card. Payments will not be sent to mismatched accounts.
+              </p>
 
               <div className="space-y-2">
                 <Label>Bank <span className="text-destructive">*</span></Label>
@@ -355,11 +359,13 @@ export function BecomeAgent() {
               </div>
 
               <div className="space-y-2">
-                <Label>Account Name</Label>
+                <Label>Account Name <span className="text-destructive">*</span></Label>
                 <div className="relative">
-                  <Input readOnly value={accountName}
-                    placeholder={verifyingAccount ? 'Verifying...' : 'Auto-detected after entering account number'}
-                    className={`pr-10 ${accountVerified ? 'border-green-500 bg-green-50 text-green-800 font-medium' : 'bg-muted/40'}`} />
+                  <Input
+                    value={accountName}
+                    onChange={(e) => { setAccountName(e.target.value); setAccountVerified(false); }}
+                    placeholder={verifyingAccount ? 'Verifying...' : 'Auto-detected or enter manually'}
+                    className={`pr-10 ${accountVerified ? 'border-green-500 bg-green-50 text-green-800 font-medium' : ''}`} />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     {verifyingAccount && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                     {!verifyingAccount && accountVerified && <CheckCircle2 className="w-4 h-4 text-green-600" />}
@@ -370,10 +376,11 @@ export function BecomeAgent() {
                     <CheckCircle2 className="w-3 h-3" /> Account verified successfully
                   </p>
                 )}
+                <p className="text-xs text-muted-foreground">Must exactly match the name on your ID card above</p>
               </div>
             </div>
 
-            <Button type="submit" disabled={isLoading || !accountVerified} className="w-full h-12" data-testid="submit-verification-btn">
+            <Button type="submit" disabled={isLoading || !accountName.trim()} className="w-full h-12" data-testid="submit-verification-btn">
               {uploading ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading documents...</>
               ) : loading ? (
