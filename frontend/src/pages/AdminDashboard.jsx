@@ -40,6 +40,8 @@ export function AdminDashboard() {
   const [messages, setMessages] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [bankRequests, setBankRequests] = useState([]);
+  const [bankRejectNote, setBankRejectNote] = useState('');
+  const [bankRejectId, setBankRejectId] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -111,20 +113,15 @@ export function AdminDashboard() {
     } catch { toast.error('Failed to review'); }
   };
 
-  const handleBankRequest = async (requestId, action) => {
+  const handleBankRequest = async (requestId, action, note = '') => {
     try {
-      const updates = {
-        status: action,
-        updated_at: new Date().toISOString(),
-      };
       const { error } = await supabase
         .from('agent_bank_change_requests')
-        .update(updates)
+        .update({ status: action, admin_note: note || null, updated_at: new Date().toISOString() })
         .eq('id', requestId);
       if (error) throw error;
 
       if (action === 'approved') {
-        // Get the request to copy details to verification record
         const req = bankRequests.find(r => r.id === requestId);
         if (req) {
           await supabase
@@ -138,10 +135,12 @@ export function AdminDashboard() {
             .eq('user_id', req.user_id)
             .eq('status', 'approved');
         }
-        toast.success('Bank details approved and updated');
+        toast.success('Bank details approved — agent can now receive payments');
       } else {
-        toast.success('Bank request rejected');
+        toast.success('Bank request rejected — agent has been notified');
       }
+      setBankRejectNote('');
+      setBankRejectId(null);
       fetchData();
     } catch (err) {
       toast.error('Failed to process request');
@@ -382,39 +381,48 @@ export function AdminDashboard() {
               </div>
               <div className="divide-y divide-orange-100">
                 {bankRequests.filter(r => r.status === 'pending').map(req => (
-                  <div key={req.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm">{req.users?.full_name || 'Unknown Agent'}</p>
-                        <span className="text-xs text-muted-foreground">{req.users?.email}</span>
+                  {(() => {
+                    const registeredName = (req.users?.full_name || '').toUpperCase().trim();
+                    const acctName = (req.account_name || '').toUpperCase().trim();
+                    const rWords = registeredName.split(/\s+/).filter(Boolean);
+                    const aWords = acctName.split(/\s+/).filter(Boolean);
+                    const matches = rWords.filter(w => aWords.includes(w)).length;
+                    const nameMatch = matches >= 2 || (rWords.length === 1 && aWords.includes(rWords[0]));
+                    return (
+                      <div key={req.id} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div>
+                            <p className="font-semibold text-sm">{req.users?.full_name || 'Unknown Agent'}</p>
+                            <p className="text-xs text-muted-foreground">{req.users?.email} · {new Date(req.created_at).toLocaleString()}</p>
+                          </div>
+                          <Badge className={nameMatch ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}>
+                            {nameMatch ? '✓ Names match' : '⚠ Name mismatch'}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-white rounded-lg border p-3">
+                          <div>
+                            <span className="text-muted-foreground block">Registered Name</span>
+                            <span className="font-bold">{registeredName || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block">Account Name</span>
+                            <span className={`font-bold ${nameMatch ? 'text-green-700' : 'text-red-700'}`}>{req.account_name}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block">Bank · Account No.</span>
+                            <span className="font-semibold">{req.bank_name}</span>
+                            <span className="font-mono block">{req.account_number}</span>
+                          </div>
+                          <div className="flex flex-col gap-1.5 justify-center">
+                            <Button size="sm" className="h-7 gap-1 bg-green-600 hover:bg-green-700 text-white text-xs"
+                              onClick={() => { setSelectedAgent(agents.find(a => a.id === req.user_id) || { id: req.user_id, full_name: req.users?.full_name, email: req.users?.email, verification: verifications.find(v => v.user_id === req.user_id && v.status === 'approved') }); }}>
+                              <Eye className="w-3 h-3" /> View Agent
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-1.5 grid grid-cols-3 gap-3 text-xs">
-                        <div>
-                          <span className="text-muted-foreground block">Bank</span>
-                          <span className="font-semibold">{req.bank_name}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground block">Account No.</span>
-                          <span className="font-mono font-bold">{req.account_number}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground block">Account Name</span>
-                          <span className="font-semibold">{req.account_name}</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">Submitted {new Date(req.created_at).toLocaleString()}</p>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <Button size="sm" className="h-8 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => handleBankRequest(req.id, 'approved')}>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                      </Button>
-                      <Button size="sm" variant="destructive" className="h-8 gap-1.5"
-                        onClick={() => handleBankRequest(req.id, 'rejected')}>
-                        <XCircle className="w-3.5 h-3.5" /> Reject
-                      </Button>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 ))}
               </div>
             </Card>
@@ -791,42 +799,124 @@ export function AdminDashboard() {
                 {/* Pending bank change request */}
                 {(() => {
                   const pending = bankRequests.find(r => r.user_id === selectedAgent.id && r.status === 'pending');
-                  return pending ? (
-                    <div className="p-4 rounded-lg border border-orange-300 bg-orange-50 space-y-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Clock className="w-4 h-4 text-orange-600" />
-                        <p className="text-xs font-bold text-orange-700 uppercase tracking-wide">Pending Change Request</p>
+                  if (!pending) return null;
+
+                  // Fuzzy name match check
+                  const idName = (selectedAgent.verification?.user_name || selectedAgent.full_name || '').toUpperCase().trim();
+                  const acctName = (pending.account_name || '').toUpperCase().trim();
+                  const idWords = idName.split(/\s+/).filter(Boolean);
+                  const acctWords = acctName.split(/\s+/).filter(Boolean);
+                  const matchCount = idWords.filter(w => acctWords.includes(w)).length;
+                  const nameMatch = matchCount >= 2 || (idWords.length === 1 && acctWords.includes(idWords[0]));
+
+                  return (
+                    <div className="rounded-lg border border-orange-300 bg-orange-50 overflow-hidden">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 px-4 py-3 bg-orange-100 border-b border-orange-200">
+                        <Clock className="w-4 h-4 text-orange-600 shrink-0" />
+                        <p className="text-xs font-bold text-orange-700 uppercase tracking-wide flex-1">Pending Bank Change — Verify Identity</p>
+                        <span className="text-xs text-orange-500">{new Date(pending.created_at).toLocaleDateString()}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Bank</span>
-                        <span className="text-sm font-semibold">{pending.bank_name}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Account Number</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-bold">{pending.account_number}</span>
-                          <button onClick={() => copyToClipboard(pending.account_number, 'Account number')} className="text-muted-foreground hover:text-primary transition-colors">
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
+
+                      <div className="p-4 space-y-4">
+                        {/* Name match alert */}
+                        <div className={`flex items-start gap-3 p-3 rounded-lg border ${nameMatch ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                          {nameMatch
+                            ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                            : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                          }
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-xs font-bold ${nameMatch ? 'text-green-700' : 'text-red-700'}`}>
+                              {nameMatch ? 'Names appear to match' : 'Name mismatch detected — verify carefully'}
+                            </p>
+                            <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-muted-foreground block">Registered Name (ID)</span>
+                                <span className="font-bold">{idName || '—'}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground block">Account Name (Bank)</span>
+                                <span className="font-bold">{acctName || '—'}</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-orange-200 pt-3">
-                        <span className="text-xs text-muted-foreground">Account Name</span>
-                        <span className="text-sm font-bold">{pending.account_name}</span>
-                      </div>
-                      <p className="text-xs text-orange-600">Submitted {new Date(pending.created_at).toLocaleDateString()}</p>
-                      <div className="flex gap-2 pt-1">
-                        <Button size="sm" className="flex-1 h-8 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => handleBankRequest(pending.id, 'approved')}>
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                        </Button>
-                        <Button size="sm" variant="destructive" className="flex-1 h-8 gap-1.5"
-                          onClick={() => handleBankRequest(pending.id, 'rejected')}>
-                          <XCircle className="w-3.5 h-3.5" /> Reject
-                        </Button>
+
+                        {/* ID card image */}
+                        {selectedAgent.verification?.id_card_url && (
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Agent's ID Card</p>
+                            <a href={selectedAgent.verification.id_card_url} target="_blank" rel="noreferrer">
+                              <img
+                                src={selectedAgent.verification.id_card_url}
+                                alt="ID Card"
+                                className="w-full max-h-40 object-contain rounded-lg border bg-muted/20 cursor-pointer hover:opacity-90 transition-opacity"
+                              />
+                              <p className="text-xs text-primary mt-1 text-center">Click to open full size ↗</p>
+                            </a>
+                          </div>
+                        )}
+
+                        {/* Bank details */}
+                        <div className="grid grid-cols-3 gap-3 text-xs bg-white rounded-lg border border-orange-200 p-3">
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5">Bank</span>
+                            <span className="font-semibold">{pending.bank_name}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5">Account No.</span>
+                            <div className="flex items-center gap-1">
+                              <span className="font-mono font-bold">{pending.account_number}</span>
+                              <button onClick={() => copyToClipboard(pending.account_number, 'Account number')} className="text-muted-foreground hover:text-primary">
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5">Account Name</span>
+                            <span className={`font-bold ${nameMatch ? 'text-green-700' : 'text-red-700'}`}>{pending.account_name}</span>
+                          </div>
+                        </div>
+
+                        {/* Reject reason input — shown when reject is clicked */}
+                        {bankRejectId === pending.id && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold text-red-700">Reason for rejection (shown to agent):</p>
+                            <Input
+                              value={bankRejectNote}
+                              onChange={e => setBankRejectNote(e.target.value)}
+                              placeholder="e.g. Account name does not match your registered name on ID"
+                              className="text-sm border-red-300 focus:ring-red-400"
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="destructive" className="flex-1 h-8 gap-1.5"
+                                onClick={() => handleBankRequest(pending.id, 'rejected', bankRejectNote)}>
+                                <XCircle className="w-3.5 h-3.5" /> Confirm Rejection
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-8"
+                                onClick={() => { setBankRejectId(null); setBankRejectNote(''); }}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        {bankRejectId !== pending.id && (
+                          <div className="flex gap-2">
+                            <Button size="sm" className="flex-1 h-9 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => handleBankRequest(pending.id, 'approved')}>
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Approve — Names Match
+                            </Button>
+                            <Button size="sm" variant="destructive" className="flex-1 h-9 gap-1.5"
+                              onClick={() => { setBankRejectId(pending.id); setBankRejectNote('Account name does not match the name on your submitted ID. Please resubmit with the correct account.'); }}>
+                              <XCircle className="w-3.5 h-3.5" /> Reject — Mismatch
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ) : null;
+                  );
                 })()}
 
                 {/* Current approved bank details */}
