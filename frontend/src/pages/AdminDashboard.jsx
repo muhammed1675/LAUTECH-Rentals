@@ -42,6 +42,7 @@ export function AdminDashboard() {
   const [bankRequests, setBankRequests] = useState([]);
   const [bankRejectNote, setBankRejectNote] = useState('');
   const [bankRejectId, setBankRejectId] = useState(null);
+  const [agentBankDetails, setAgentBankDetails] = useState([]);
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -80,6 +81,13 @@ export function AdminDashboard() {
         }));
         setBankRequests(enriched);
       } catch (e) { console.error('Bank requests fetch failed:', e); }
+      // Load agent bank details (source of truth for bank display)
+      try {
+        const { data: bankDetails } = await supabase
+          .from('agent_bank_details')
+          .select('*');
+        setAgentBankDetails(bankDetails || []);
+      } catch (e) { console.error('agent_bank_details fetch failed:', e); }
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load dashboard data');
@@ -102,6 +110,19 @@ export function AdminDashboard() {
     try {
       await verificationAPI.review(requestId, status, user.id);
       toast.success(`Verification ${status}`);
+      // If approved and verification has bank details, write to agent_bank_details
+      if (status === 'approved' && selectedVerification?.bank_name) {
+        await supabase
+          .from('agent_bank_details')
+          .upsert({
+            user_id: selectedVerification.user_id || selectedVerification.id,
+            bank_code: selectedVerification.bank_code,
+            bank_name: selectedVerification.bank_name,
+            account_number: selectedVerification.account_number,
+            account_name: selectedVerification.account_name,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' });
+      }
       if (selectedVerification) {
         const name = selectedVerification.user_name;
         const email = selectedVerification.user_email;
@@ -130,41 +151,17 @@ export function AdminDashboard() {
       if (action === 'approved') {
         const req = bankRequests.find(r => r.id === requestId);
         if (req) {
-          // Try to find any existing verification row for this agent
-          const { data: existingVerif } = await supabase
-            .from('agent_verification_requests')
-            .select('id, status')
-            .eq('user_id', req.user_id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          if (existingVerif) {
-            // Update existing row (regardless of status)
-            await supabase
-              .from('agent_verification_requests')
-              .update({
-                bank_code: req.bank_code,
-                bank_name: req.bank_name,
-                account_number: req.account_number,
-                account_name: req.account_name,
-              })
-              .eq('id', existingVerif.id);
-          } else {
-            // No verification row — insert a minimal one with bank details
-            await supabase
-              .from('agent_verification_requests')
-              .insert({
-                user_id: req.user_id,
-                user_name: req.users?.full_name || '',
-                user_email: req.users?.email || '',
-                bank_code: req.bank_code,
-                bank_name: req.bank_name,
-                account_number: req.account_number,
-                account_name: req.account_name,
-                status: 'approved',
-              });
-          }
+          // Upsert into dedicated agent_bank_details table (source of truth)
+          await supabase
+            .from('agent_bank_details')
+            .upsert({
+              user_id: req.user_id,
+              bank_code: req.bank_code,
+              bank_name: req.bank_name,
+              account_number: req.account_number,
+              account_name: req.account_name,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id' });
         }
         toast.success('Bank details approved — agent can now receive payments');
       } else {
@@ -221,12 +218,23 @@ export function AdminDashboard() {
     toast.success(`${label} copied`);
   };
 
-  // Get agent's verification record that has bank details (prefer approved, fallback to any)
+  // Get agent's bank + verification data. Bank from agent_bank_details (source of truth),
+  // other fields (address, id_card_url) from agent_verification_requests.
   const getAgentVerification = (agentId) => {
-    const approved = verifications.find(v => v.user_id === agentId && v.status === 'approved');
-    if (approved) return approved;
-    // Fallback: any row with bank details for this agent
-    return verifications.find(v => v.user_id === agentId && v.bank_name);
+    const bankRow = agentBankDetails.find(b => b.user_id === agentId);
+    const verifRow = verifications.find(v => v.user_id === agentId && v.status === 'approved')
+      || verifications.find(v => v.user_id === agentId);
+    // Merge: verifRow for doc URLs/address, bankRow for bank fields
+    if (!verifRow && !bankRow) return null;
+    return {
+      ...(verifRow || {}),
+      ...(bankRow ? {
+        bank_code: bankRow.bank_code,
+        bank_name: bankRow.bank_name,
+        account_number: bankRow.account_number,
+        account_name: bankRow.account_name,
+      } : {}),
+    };
   };
 
   const getAgentPropertyCount = (agentId) =>
