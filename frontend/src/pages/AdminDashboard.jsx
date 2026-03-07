@@ -66,14 +66,20 @@ export function AdminDashboard() {
       setInspections(inspectionsRes.data);
       setTransactions(txRes.data);
       setMessages(messagesRes.data);
-      // Load bank change requests
+      // Load bank change requests (no FK join - enrich from allUsers instead)
       try {
-        const { data: bankReqs } = await supabase
+        const { data: bankReqs, error: bankErr } = await supabase
           .from('agent_bank_change_requests')
-          .select('*, users(full_name, email)')
+          .select('*')
           .order('created_at', { ascending: false });
-        setBankRequests(bankReqs || []);
-      } catch {}
+        if (bankErr) console.error('Bank requests error:', bankErr);
+        // Enrich with user info from already-loaded users
+        const enriched = (bankReqs || []).map(r => ({
+          ...r,
+          users: allUsers.find(u => u.id === r.user_id) || null,
+        }));
+        setBankRequests(enriched);
+      } catch (e) { console.error('Bank requests fetch failed:', e); }
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load dashboard data');
@@ -391,8 +397,8 @@ export function AdminDashboard() {
                     <div key={req.id} className="p-4 space-y-3">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div>
-                          <p className="font-semibold text-sm">{req.users?.full_name || 'Unknown Agent'}</p>
-                          <p className="text-xs text-muted-foreground">{req.users?.email} · {new Date(req.created_at).toLocaleString()}</p>
+                          <p className="font-semibold text-sm">{req.users?.full_name || agents.find(a => a.id === req.user_id)?.full_name || 'Unknown Agent'}</p>
+                          <p className="text-xs text-muted-foreground">{req.users?.email || agents.find(a => a.id === req.user_id)?.email} · {new Date(req.created_at).toLocaleString()}</p>
                         </div>
                         <Badge className={nameMatch ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}>
                           {nameMatch ? '✓ Names match' : '⚠ Name mismatch'}
@@ -796,11 +802,12 @@ export function AdminDashboard() {
 
                 {/* Pending bank change request */}
                 {(() => {
-                  const pending = bankRequests.find(r => r.user_id === selectedAgent.id && r.status === 'pending');
+                  const agentId = selectedAgent.id || selectedAgent.user_id;
+                  const pending = bankRequests.find(r => r.user_id === agentId && r.status === 'pending');
                   if (!pending) return null;
 
                   // Fuzzy name match check
-                  const idName = (selectedAgent.verification?.user_name || selectedAgent.full_name || '').toUpperCase().trim();
+                  const idName = (selectedAgent.full_name || selectedAgent.verification?.user_name || '').toUpperCase().trim();
                   const acctName = (pending.account_name || '').toUpperCase().trim();
                   const idWords = idName.split(' ').filter(Boolean);
                   const acctWords = acctName.split(' ').filter(Boolean);
