@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Label } from '../components/ui/label';
-import { Building2, Mail, Lock, User, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Building2, Mail, Lock, User, Eye, EyeOff, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Register() {
@@ -17,39 +17,37 @@ export function Register() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!fullName || !email || !password || !confirmPassword) {
+    if (!fullName || !email || !phone || !password || !confirmPassword) {
       toast.error('Please fill in all fields');
       return;
     }
+
+    if (!/^[+]?[0-9]{10,15}$/.test(phone.replace(/\s/g, ''))) {
+      toast.error('Please enter a valid phone number');
+      return;
+    }
+
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
+
     if (password.length < 6) {
       toast.error('Password must be at least 6 characters');
-      return;
-    }
-    if (!agreedToTerms) {
-      toast.error('Please agree to the Terms & Conditions to continue');
       return;
     }
 
     setLoading(true);
     try {
-      const result = await register(email, password, fullName);
-      if (result?.requiresConfirmation) {
-        setConfirmed(true);
-      } else {
-        toast.success('Account created successfully!');
-        navigate('/browse');
-      }
+      await register(email, password, fullName, phone);
+      toast.success('Account created successfully!');
+      navigate('/browse');
     } catch (error) {
       toast.error(error.message || 'Registration failed');
     } finally {
@@ -57,35 +55,6 @@ export function Register() {
     }
   };
 
-  // ── Email confirmation screen ──
-  if (confirmed) {
-    return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-5">
-            <CheckCircle2 className="w-8 h-8 text-blue-600" />
-          </div>
-          <h1 className="text-2xl font-bold mb-2">Check your email</h1>
-          <p className="text-muted-foreground text-sm mb-1">We sent a verification link to</p>
-          <p className="font-semibold text-foreground mb-4">{email}</p>
-          <p className="text-muted-foreground text-sm mb-6">
-            Click the link in the email to activate your Rentora account. Check your spam folder if you don't see it.
-          </p>
-          <Link to="/login">
-            <Button className="w-full">Go to Sign In</Button>
-          </Link>
-          <p className="text-xs text-muted-foreground mt-4">
-            Wrong email?{' '}
-            <button onClick={() => setConfirmed(false)} className="text-primary hover:underline">
-              Go back
-            </button>
-          </p>
-        </Card>
-      </div>
-    );
-  }
-
-  // ── Registration form ──
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4" data-testid="register-page">
       <Card className="w-full max-w-md p-8">
@@ -135,6 +104,22 @@ export function Register() {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="phone">Phone Number</Label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. 08012345678"
+                className="pl-10 h-12"
+                data-testid="register-phone"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -173,34 +158,9 @@ export function Register() {
             </div>
           </div>
 
-          {/* Terms agreement */}
-          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border border-border">
-            <input
-              type="checkbox"
-              id="agree-terms"
-              checked={agreedToTerms}
-              onChange={(e) => setAgreedToTerms(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-primary cursor-pointer shrink-0"
-            />
-            <label htmlFor="agree-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
-              I agree to Rentora's{' '}
-              <a href="/terms" target="_blank" className="text-primary hover:underline font-medium">
-                Terms & Conditions
-              </a>
-              ,{' '}
-              <a href="/terms" target="_blank" className="text-primary hover:underline font-medium">
-                Privacy Policy
-              </a>
-              {' '}and{' '}
-              <a href="/terms" target="_blank" className="text-primary hover:underline font-medium">
-                Refund Policy
-              </a>
-            </label>
-          </div>
-
           <Button
             type="submit"
-            disabled={loading || !agreedToTerms}
+            disabled={loading}
             className="w-full h-12 active:scale-[0.98] transition-transform"
             data-testid="register-submit"
           >
