@@ -1019,20 +1019,20 @@ export function AdminDashboard() {
                 </div>
               )}
             </div>
+            <DialogFooter>
+              {selectedAgentData?.phone ? (
+                <a href={`tel:${selectedAgentData.phone}`}>
+                  <Button variant="outline" className="gap-2"><Phone className="w-4 h-4" /> Call Agent</Button>
+                </a>
+              ) : (
+                <a href={`mailto:${selectedAgentData?.email}`} target="_blank" rel="noreferrer">
+                  <Button variant="outline" className="gap-2"><Mail className="w-4 h-4" /> Email Agent</Button>
+                </a>
+              )}
+              <Button onClick={() => setSelectedAgent(null)}>Close</Button>
+            </DialogFooter>
             );
           })()}
-          <DialogFooter>
-            {selectedAgentData?.phone ? (
-              <a href={`tel:${selectedAgentData.phone}`}>
-                <Button variant="outline" className="gap-2"><Phone className="w-4 h-4" /> Call Agent</Button>
-              </a>
-            ) : (
-              <a href={`mailto:${selectedAgentData?.email}`} target="_blank" rel="noreferrer">
-                <Button variant="outline" className="gap-2"><Mail className="w-4 h-4" /> Email Agent</Button>
-              </a>
-            )}
-            <Button onClick={() => setSelectedAgent(null)}>Close</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
