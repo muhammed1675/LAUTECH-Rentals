@@ -380,50 +380,48 @@ export function AdminDashboard() {
                 <p className="text-xs text-orange-600 mt-0.5">Agents are requesting to update their payout bank details</p>
               </div>
               <div className="divide-y divide-orange-100">
-                {bankRequests.filter(r => r.status === 'pending').map(req => (
-                  {(() => {
-                    const registeredName = (req.users?.full_name || '').toUpperCase().trim();
-                    const acctName = (req.account_name || '').toUpperCase().trim();
-                    const rWords = registeredName.split(/\s+/).filter(Boolean);
-                    const aWords = acctName.split(/\s+/).filter(Boolean);
-                    const matches = rWords.filter(w => aWords.includes(w)).length;
-                    const nameMatch = matches >= 2 || (rWords.length === 1 && aWords.includes(rWords[0]));
-                    return (
-                      <div key={req.id} className="p-4 space-y-3">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div>
-                            <p className="font-semibold text-sm">{req.users?.full_name || 'Unknown Agent'}</p>
-                            <p className="text-xs text-muted-foreground">{req.users?.email} · {new Date(req.created_at).toLocaleString()}</p>
-                          </div>
-                          <Badge className={nameMatch ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}>
-                            {nameMatch ? '✓ Names match' : '⚠ Name mismatch'}
-                          </Badge>
+                {bankRequests.filter(r => r.status === 'pending').map(req => {
+                  const registeredName = (req.users?.full_name || '').toUpperCase().trim();
+                  const acctName = (req.account_name || '').toUpperCase().trim();
+                  const rWords = registeredName.split(' ').filter(Boolean);
+                  const aWords = acctName.split(' ').filter(Boolean);
+                  const matches = rWords.filter(w => aWords.includes(w)).length;
+                  const nameMatch = matches >= 2 || (rWords.length === 1 && aWords.includes(rWords[0]));
+                  return (
+                    <div key={req.id} className="p-4 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <p className="font-semibold text-sm">{req.users?.full_name || 'Unknown Agent'}</p>
+                          <p className="text-xs text-muted-foreground">{req.users?.email} · {new Date(req.created_at).toLocaleString()}</p>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-white rounded-lg border p-3">
-                          <div>
-                            <span className="text-muted-foreground block">Registered Name</span>
-                            <span className="font-bold">{registeredName || '—'}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground block">Account Name</span>
-                            <span className={`font-bold ${nameMatch ? 'text-green-700' : 'text-red-700'}`}>{req.account_name}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground block">Bank · Account No.</span>
-                            <span className="font-semibold">{req.bank_name}</span>
-                            <span className="font-mono block">{req.account_number}</span>
-                          </div>
-                          <div className="flex flex-col gap-1.5 justify-center">
-                            <Button size="sm" className="h-7 gap-1 bg-green-600 hover:bg-green-700 text-white text-xs"
-                              onClick={() => { setSelectedAgent(agents.find(a => a.id === req.user_id) || { id: req.user_id, full_name: req.users?.full_name, email: req.users?.email, verification: verifications.find(v => v.user_id === req.user_id && v.status === 'approved') }); }}>
-                              <Eye className="w-3 h-3" /> View Agent
-                            </Button>
-                          </div>
+                        <Badge className={nameMatch ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}>
+                          {nameMatch ? '✓ Names match' : '⚠ Name mismatch'}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-white rounded-lg border p-3">
+                        <div>
+                          <span className="text-muted-foreground block">Registered Name</span>
+                          <span className="font-bold">{registeredName || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Account Name</span>
+                          <span className={`font-bold ${nameMatch ? 'text-green-700' : 'text-red-700'}`}>{req.account_name}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Bank · Account No.</span>
+                          <span className="font-semibold">{req.bank_name}</span>
+                          <span className="font-mono block">{req.account_number}</span>
+                        </div>
+                        <div className="flex flex-col gap-1.5 justify-center">
+                          <Button size="sm" className="h-7 gap-1 bg-green-600 hover:bg-green-700 text-white text-xs"
+                            onClick={() => setSelectedAgent(agents.find(a => a.id === req.user_id) || { id: req.user_id, full_name: req.users?.full_name, email: req.users?.email, verification: verifications.find(v => v.user_id === req.user_id && v.status === 'approved') })}>
+                            <Eye className="w-3 h-3" /> View Agent
+                          </Button>
                         </div>
                       </div>
-                    );
-                  })()}
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           )}
@@ -804,8 +802,8 @@ export function AdminDashboard() {
                   // Fuzzy name match check
                   const idName = (selectedAgent.verification?.user_name || selectedAgent.full_name || '').toUpperCase().trim();
                   const acctName = (pending.account_name || '').toUpperCase().trim();
-                  const idWords = idName.split(/\s+/).filter(Boolean);
-                  const acctWords = acctName.split(/\s+/).filter(Boolean);
+                  const idWords = idName.split(' ').filter(Boolean);
+                  const acctWords = acctName.split(' ').filter(Boolean);
                   const matchCount = idWords.filter(w => acctWords.includes(w)).length;
                   const nameMatch = matchCount >= 2 || (idWords.length === 1 && acctWords.includes(idWords[0]));
 
