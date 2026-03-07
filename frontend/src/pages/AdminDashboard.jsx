@@ -130,16 +130,41 @@ export function AdminDashboard() {
       if (action === 'approved') {
         const req = bankRequests.find(r => r.id === requestId);
         if (req) {
-          await supabase
+          // Try to find any existing verification row for this agent
+          const { data: existingVerif } = await supabase
             .from('agent_verification_requests')
-            .update({
-              bank_code: req.bank_code,
-              bank_name: req.bank_name,
-              account_number: req.account_number,
-              account_name: req.account_name,
-            })
+            .select('id, status')
             .eq('user_id', req.user_id)
-            .eq('status', 'approved');
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (existingVerif) {
+            // Update existing row (regardless of status)
+            await supabase
+              .from('agent_verification_requests')
+              .update({
+                bank_code: req.bank_code,
+                bank_name: req.bank_name,
+                account_number: req.account_number,
+                account_name: req.account_name,
+              })
+              .eq('id', existingVerif.id);
+          } else {
+            // No verification row — insert a minimal one with bank details
+            await supabase
+              .from('agent_verification_requests')
+              .insert({
+                user_id: req.user_id,
+                user_name: req.users?.full_name || '',
+                user_email: req.users?.email || '',
+                bank_code: req.bank_code,
+                bank_name: req.bank_name,
+                account_number: req.account_number,
+                account_name: req.account_name,
+                status: 'approved',
+              });
+          }
         }
         toast.success('Bank details approved — agent can now receive payments');
       } else {
@@ -196,9 +221,13 @@ export function AdminDashboard() {
     toast.success(`${label} copied`);
   };
 
-  // Get agent's approved verification record (has bank details)
-  const getAgentVerification = (agentId) =>
-    verifications.find(v => v.user_id === agentId && v.status === 'approved');
+  // Get agent's verification record that has bank details (prefer approved, fallback to any)
+  const getAgentVerification = (agentId) => {
+    const approved = verifications.find(v => v.user_id === agentId && v.status === 'approved');
+    if (approved) return approved;
+    // Fallback: any row with bank details for this agent
+    return verifications.find(v => v.user_id === agentId && v.bank_name);
+  };
 
   const getAgentPropertyCount = (agentId) =>
     properties.filter(p => p.uploaded_by_agent_id === agentId).length;
@@ -770,7 +799,13 @@ export function AdminDashboard() {
               <UserCog className="w-5 h-5 text-primary" /> Agent Profile
             </DialogTitle>
           </DialogHeader>
-          {selectedAgent && (
+          {selectedAgent && (() => {
+            // Always read live verification from state (not stale snapshot)
+            const liveVerification = getAgentVerification(selectedAgent.id || selectedAgent.user_id);
+            const agentWithLiveVerif = { ...selectedAgent, verification: liveVerification };
+            const selectedAgentData = agentWithLiveVerif;
+            // shadow selectedAgent inside dialog with live data
+            return (
             <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
               {/* Basic info */}
               <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/40">
@@ -778,8 +813,8 @@ export function AdminDashboard() {
                   <User className="w-7 h-7 text-primary" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold text-base">{selectedAgent.full_name}</p>
-                  <p className="text-sm text-muted-foreground truncate">{selectedAgent.email}</p>
+                  <p className="font-bold text-base">{selectedAgentData.full_name}</p>
+                  <p className="text-sm text-muted-foreground truncate">{selectedAgentData.email}</p>
                   <Badge className="mt-1.5 bg-green-100 text-green-700 text-xs">✓ Verified Agent</Badge>
                 </div>
               </div>
@@ -787,11 +822,11 @@ export function AdminDashboard() {
               {/* Stats */}
               <div className="grid grid-cols-2 gap-3">
                 <Card className="p-3 text-center">
-                  <p className="text-2xl font-bold text-primary">{getAgentPropertyCount(selectedAgent.id)}</p>
+                  <p className="text-2xl font-bold text-primary">{getAgentPropertyCount(selectedAgentData.id)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Properties Listed</p>
                 </Card>
                 <Card className="p-3 text-center">
-                  <p className="text-2xl font-bold text-blue-600">{getAgentInspectionCount(selectedAgent.id)}</p>
+                  <p className="text-2xl font-bold text-blue-600">{getAgentInspectionCount(selectedAgentData.id)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Inspections</p>
                 </Card>
               </div>
@@ -802,12 +837,12 @@ export function AdminDashboard() {
 
                 {/* Pending bank change request */}
                 {(() => {
-                  const agentId = selectedAgent.id || selectedAgent.user_id;
+                  const agentId = selectedAgentData.id || selectedAgentData.user_id;
                   const pending = bankRequests.find(r => r.user_id === agentId && r.status === 'pending');
                   if (!pending) return null;
 
                   // Fuzzy name match check
-                  const idName = (selectedAgent.full_name || selectedAgent.verification?.user_name || '').toUpperCase().trim();
+                  const idName = (selectedAgent.full_name || selectedAgentData.verification?.user_name || '').toUpperCase().trim();
                   const acctName = (pending.account_name || '').toUpperCase().trim();
                   const idWords = idName.split(' ').filter(Boolean);
                   const acctWords = acctName.split(' ').filter(Boolean);
@@ -848,12 +883,12 @@ export function AdminDashboard() {
                         </div>
 
                         {/* ID card image */}
-                        {selectedAgent.verification?.id_card_url && (
+                        {selectedAgentData.verification?.id_card_url && (
                           <div>
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Agent's ID Card</p>
-                            <a href={selectedAgent.verification.id_card_url} target="_blank" rel="noreferrer">
+                            <a href={selectedAgentData.verification.id_card_url} target="_blank" rel="noreferrer">
                               <img
-                                src={selectedAgent.verification.id_card_url}
+                                src={selectedAgentData.verification.id_card_url}
                                 alt="ID Card"
                                 className="w-full max-h-40 object-contain rounded-lg border bg-muted/20 cursor-pointer hover:opacity-90 transition-opacity"
                               />
@@ -925,7 +960,7 @@ export function AdminDashboard() {
                 })()}
 
                 {/* Current approved bank details */}
-                {selectedAgent.verification?.bank_name ? (
+                {selectedAgentData.verification?.bank_name ? (
                   <div className="p-4 rounded-lg border bg-blue-50/50 border-blue-200 space-y-3">
                     <div className="flex items-center gap-2 mb-1">
                       <CreditCard className="w-4 h-4 text-blue-600" />
@@ -933,20 +968,20 @@ export function AdminDashboard() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Bank</span>
-                      <span className="text-sm font-semibold">{selectedAgent.verification.bank_name}</span>
+                      <span className="text-sm font-semibold">{selectedAgentData.verification.bank_name}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Account Number</span>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-bold">{selectedAgent.verification.account_number}</span>
-                        <button onClick={() => copyToClipboard(selectedAgent.verification.account_number, 'Account number')} className="text-muted-foreground hover:text-primary transition-colors">
+                        <span className="font-mono text-sm font-bold">{selectedAgentData.verification.account_number}</span>
+                        <button onClick={() => copyToClipboard(selectedAgentData.verification.account_number, 'Account number')} className="text-muted-foreground hover:text-primary transition-colors">
                           <Copy className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
                     <div className="flex items-center justify-between border-t border-blue-200 pt-3">
                       <span className="text-xs text-muted-foreground">Account Name</span>
-                      <span className="text-sm font-bold text-blue-800">{selectedAgent.verification.account_name}</span>
+                      <span className="text-sm font-bold text-blue-800">{selectedAgentData.verification.account_name}</span>
                     </div>
                   </div>
                 ) : (
@@ -958,19 +993,19 @@ export function AdminDashboard() {
               </div>
 
               {/* Address */}
-              {selectedAgent.verification?.address && (
+              {selectedAgentData.verification?.address && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Address</p>
-                  <p className="text-sm p-3 rounded-lg bg-muted/40">{selectedAgent.verification.address}</p>
+                  <p className="text-sm p-3 rounded-lg bg-muted/40">{selectedAgentData.verification.address}</p>
                 </div>
               )}
 
               {/* Properties */}
-              {getAgentPropertyCount(selectedAgent.id) > 0 && (
+              {getAgentPropertyCount(selectedAgentData.id) > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Listed Properties</p>
                   <div className="space-y-2">
-                    {properties.filter(p => p.uploaded_by_agent_id === selectedAgent.id).map(p => (
+                    {properties.filter(p => p.uploaded_by_agent_id === selectedAgentData.id).map(p => (
                       <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
                         <img src={p.images?.[0] || 'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg'} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
                         <div className="min-w-0 flex-1">
@@ -984,14 +1019,15 @@ export function AdminDashboard() {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
           <DialogFooter>
-            {selectedAgent?.phone ? (
-              <a href={`tel:${selectedAgent.phone}`}>
+            {selectedAgentData?.phone ? (
+              <a href={`tel:${selectedAgentData.phone}`}>
                 <Button variant="outline" className="gap-2"><Phone className="w-4 h-4" /> Call Agent</Button>
               </a>
             ) : (
-              <a href={`mailto:${selectedAgent?.email}`} target="_blank" rel="noreferrer">
+              <a href={`mailto:${selectedAgentData?.email}`} target="_blank" rel="noreferrer">
                 <Button variant="outline" className="gap-2"><Mail className="w-4 h-4" /> Email Agent</Button>
               </a>
             )}
