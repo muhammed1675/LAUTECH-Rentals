@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { verificationAPI, storageAPI } from '../lib/api';
-import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -50,8 +49,6 @@ export function BecomeAgent() {
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
-  const [verifyingAccount, setVerifyingAccount] = useState(false);
-  const [accountVerified, setAccountVerified] = useState(false);
 
   // Load bank list from Korapay via edge function
   useEffect(() => {
@@ -77,48 +74,10 @@ export function BecomeAgent() {
     loadBanks();
   }, []);
 
-  // Auto-verify when 10 digits entered and bank selected
-  useEffect(() => {
-    if (accountNumber.length === 10 && bankCode) {
-      verifyAccountNumber();
-    } else {
-      setAccountName('');
-      setAccountVerified(false);
-    }
-  }, [accountNumber, bankCode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const verifyAccountNumber = async () => {
-    setVerifyingAccount(true);
-    setAccountName('');
-    setAccountVerified(false);
-    try {
-      const { data, error } = await supabase.functions.invoke('resolve-bank', {
-        body: { account_number: accountNumber, bank_code: bankCode },
-      });
-      if (error) throw new Error(error.message);
-      if (data?.success && data?.account_name) {
-        setAccountName(data.account_name);
-        setAccountVerified(true);
-        toast.success('Account verified!');
-      } else {
-        toast.error(data?.message || 'Could not verify account. Check number and bank.');
-      }
-    } catch (err) {
-      console.error('Bank verify error:', err);
-      toast.error('Account verification failed. You can still submit — admin will verify manually.');
-      // Allow manual entry if auto-verify fails
-      setAccountVerified(false);
-    } finally {
-      setVerifyingAccount(false);
-    }
-  };
-
   const handleBankChange = (value) => {
     const selected = banks.find(b => b.code === value);
     setBankCode(value);
     setBankName(selected?.name || '');
-    setAccountName('');
-    setAccountVerified(false);
   };
 
   const handleImageSelect = (e, setFile, setPreview) => {
@@ -360,23 +319,12 @@ export function BecomeAgent() {
 
               <div className="space-y-2">
                 <Label>Account Name <span className="text-destructive">*</span></Label>
-                <div className="relative">
-                  <Input
-                    value={accountName}
-                    onChange={(e) => { setAccountName(e.target.value); setAccountVerified(false); }}
-                    placeholder={verifyingAccount ? 'Verifying...' : 'Auto-detected or enter manually'}
-                    className={`pr-10 ${accountVerified ? 'border-green-500 bg-green-50 text-green-800 font-medium' : ''}`} />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {verifyingAccount && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                    {!verifyingAccount && accountVerified && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                  </div>
-                </div>
-                {accountVerified && (
-                  <p className="text-xs text-green-600 font-medium flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Account verified successfully
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">Must exactly match the name on your ID card above</p>
+                <Input
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder="e.g. JOHN ADEYEMI OKAFOR"
+                />
+                <p className="text-xs text-muted-foreground">Enter exactly as it appears on your bank account — must match your ID card name</p>
               </div>
             </div>
 
