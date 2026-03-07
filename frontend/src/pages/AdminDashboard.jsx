@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { adminAPI, userAPI, verificationAPI, propertyAPI, inspectionAPI, transactionAPI, contactAPI } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -14,7 +15,7 @@ import {
   LayoutDashboard, Users, Shield, Building2, Calendar, Receipt,
   CheckCircle2, XCircle, Eye, Ban, UserCheck, TrendingUp, Coins,
   Search, RefreshCw, Trash2, AlertTriangle, User, FileText,
-  MessageSquare, Mail, Inbox, MailOpen, UserCog, Copy, Phone
+  MessageSquare, Mail, Inbox, MailOpen, UserCog, Copy, Phone, CreditCard, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -38,6 +39,7 @@ export function AdminDashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, property: null, deleting: false });
   const [messages, setMessages] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
+  const [bankRequests, setBankRequests] = useState([]);
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -62,6 +64,14 @@ export function AdminDashboard() {
       setInspections(inspectionsRes.data);
       setTransactions(txRes.data);
       setMessages(messagesRes.data);
+      // Load bank change requests
+      try {
+        const { data: bankReqs } = await supabase
+          .from('agent_bank_change_requests')
+          .select('*, users(full_name, email)')
+          .order('created_at', { ascending: false });
+        setBankRequests(bankReqs || []);
+      } catch {}
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load dashboard data');
@@ -99,6 +109,43 @@ export function AdminDashboard() {
       setSelectedVerification(null);
       fetchData();
     } catch { toast.error('Failed to review'); }
+  };
+
+  const handleBankRequest = async (requestId, action) => {
+    try {
+      const updates = {
+        status: action,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from('agent_bank_change_requests')
+        .update(updates)
+        .eq('id', requestId);
+      if (error) throw error;
+
+      if (action === 'approved') {
+        // Get the request to copy details to verification record
+        const req = bankRequests.find(r => r.id === requestId);
+        if (req) {
+          await supabase
+            .from('agent_verification_requests')
+            .update({
+              bank_code: req.bank_code,
+              bank_name: req.bank_name,
+              account_number: req.account_number,
+              account_name: req.account_name,
+            })
+            .eq('user_id', req.user_id)
+            .eq('status', 'approved');
+        }
+        toast.success('Bank details approved and updated');
+      } else {
+        toast.success('Bank request rejected');
+      }
+      fetchData();
+    } catch (err) {
+      toast.error('Failed to process request');
+    }
   };
 
   const handleApproveProperty = async (propertyId, status) => {
@@ -201,7 +248,7 @@ export function AdminDashboard() {
               <Users className="w-4 h-4 shrink-0" /> Users
               {users.length > 0 && <Badge variant="secondary" className="ml-1 text-xs px-1.5">{users.length}</Badge>}
             </TabsTrigger>
-            <TabsTrigger value="agents" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm whitespace-nowrap">
+            <TabsTrigger value="agents" className="relative" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm whitespace-nowrap">
               <UserCog className="w-4 h-4 shrink-0" /> Agents
               {agents.length > 0 && <Badge variant="secondary" className="ml-1 text-xs px-1.5">{agents.length}</Badge>}
             </TabsTrigger>
@@ -322,6 +369,56 @@ export function AdminDashboard() {
 
         {/* ── Agents ── */}
         <TabsContent value="agents">
+          {/* Pending Bank Change Requests */}
+          {bankRequests.filter(r => r.status === 'pending').length > 0 && (
+            <Card className="mb-5 border-orange-200 bg-orange-50/50">
+              <div className="p-4 border-b border-orange-200">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-orange-600" />
+                  <h3 className="font-semibold text-orange-800">Pending Bank Change Requests</h3>
+                  <Badge className="bg-orange-500 text-white text-xs ml-1">{bankRequests.filter(r => r.status === 'pending').length}</Badge>
+                </div>
+                <p className="text-xs text-orange-600 mt-0.5">Agents are requesting to update their payout bank details</p>
+              </div>
+              <div className="divide-y divide-orange-100">
+                {bankRequests.filter(r => r.status === 'pending').map(req => (
+                  <div key={req.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-sm">{req.users?.full_name || 'Unknown Agent'}</p>
+                        <span className="text-xs text-muted-foreground">{req.users?.email}</span>
+                      </div>
+                      <div className="mt-1.5 grid grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <span className="text-muted-foreground block">Bank</span>
+                          <span className="font-semibold">{req.bank_name}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Account No.</span>
+                          <span className="font-mono font-bold">{req.account_number}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Account Name</span>
+                          <span className="font-semibold">{req.account_name}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Submitted {new Date(req.created_at).toLocaleString()}</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" className="h-8 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => handleBankRequest(req.id, 'approved')}>
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                      </Button>
+                      <Button size="sm" variant="destructive" className="h-8 gap-1.5"
+                        onClick={() => handleBankRequest(req.id, 'rejected')}>
+                        <XCircle className="w-3.5 h-3.5" /> Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           <div className="mb-4 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Search agents..." value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)} className="pl-10" />
@@ -690,8 +787,55 @@ export function AdminDashboard() {
               {/* Bank details */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bank Account</p>
+
+                {/* Pending bank change request */}
+                {(() => {
+                  const pending = bankRequests.find(r => r.user_id === selectedAgent.id && r.status === 'pending');
+                  return pending ? (
+                    <div className="p-4 rounded-lg border border-orange-300 bg-orange-50 space-y-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock className="w-4 h-4 text-orange-600" />
+                        <p className="text-xs font-bold text-orange-700 uppercase tracking-wide">Pending Change Request</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Bank</span>
+                        <span className="text-sm font-semibold">{pending.bank_name}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Account Number</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-bold">{pending.account_number}</span>
+                          <button onClick={() => copyToClipboard(pending.account_number, 'Account number')} className="text-muted-foreground hover:text-primary transition-colors">
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-orange-200 pt-3">
+                        <span className="text-xs text-muted-foreground">Account Name</span>
+                        <span className="text-sm font-bold">{pending.account_name}</span>
+                      </div>
+                      <p className="text-xs text-orange-600">Submitted {new Date(pending.created_at).toLocaleDateString()}</p>
+                      <div className="flex gap-2 pt-1">
+                        <Button size="sm" className="flex-1 h-8 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => handleBankRequest(pending.id, 'approved')}>
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                        </Button>
+                        <Button size="sm" variant="destructive" className="flex-1 h-8 gap-1.5"
+                          onClick={() => handleBankRequest(pending.id, 'rejected')}>
+                          <XCircle className="w-3.5 h-3.5" /> Reject
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* Current approved bank details */}
                 {selectedAgent.verification?.bank_name ? (
                   <div className="p-4 rounded-lg border bg-blue-50/50 border-blue-200 space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CreditCard className="w-4 h-4 text-blue-600" />
+                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Current Approved Details</p>
+                    </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Bank</span>
                       <span className="text-sm font-semibold">{selectedAgent.verification.bank_name}</span>
@@ -712,8 +856,8 @@ export function AdminDashboard() {
                   </div>
                 ) : (
                   <div className="p-4 rounded-lg border border-yellow-200 bg-yellow-50">
-                    <p className="text-sm text-yellow-700">No bank details on file</p>
-                    <p className="text-xs text-yellow-600 mt-0.5">Agent may have registered before bank details were required</p>
+                    <p className="text-sm text-yellow-700">No approved bank details on file</p>
+                    <p className="text-xs text-yellow-600 mt-0.5">Approve the pending request above to set bank details</p>
                   </div>
                 )}
               </div>
