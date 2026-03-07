@@ -15,7 +15,8 @@ import {
   Shield,
   Building2,
   Plus,
-  ExternalLink
+  ExternalLink,
+  Phone
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -128,6 +129,11 @@ export function Profile() {
             <div>
               <h2 className="font-semibold text-lg">{user?.full_name}</h2>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
+              {user?.phone && (
+                <a href={`tel:${user.phone}`} className="text-sm text-primary flex items-center gap-1 mt-0.5 hover:underline">
+                  <Phone className="w-3.5 h-3.5" /> {user.phone}
+                </a>
+              )}
               <Badge variant="outline" className="mt-2 capitalize">
                 {user?.role}
               </Badge>
@@ -382,6 +388,16 @@ export function Profile() {
               <div>
                 <p className="text-sm text-muted-foreground">Email</p>
                 <p className="font-medium">{user?.email}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Phone Number</p>
+                {user?.phone ? (
+                  <a href={`tel:${user.phone}`} className="font-medium text-primary hover:underline flex items-center gap-1.5">
+                    <Phone className="w-4 h-4" /> {user.phone}
+                  </a>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Not provided</p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Role</p>
