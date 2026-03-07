@@ -806,6 +806,7 @@ export function AdminDashboard() {
             const selectedAgentData = agentWithLiveVerif;
             // shadow selectedAgent inside dialog with live data
             return (
+            <>
             <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
               {/* Basic info */}
               <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/40">
@@ -1031,6 +1032,7 @@ export function AdminDashboard() {
               )}
               <Button onClick={() => setSelectedAgent(null)}>Close</Button>
             </DialogFooter>
+          </>
             );
           })()}
         </DialogContent>
