@@ -415,6 +415,7 @@ export const inspectionAPI = {
 
     if (error || !inspection) throw new Error('Inspection not found');
 
+    // Agent phone comes from users.phone — the number they registered with
     let agentPhone = null;
     if (inspection.agent_id) {
       const { data: agentUser } = await supabase
@@ -422,17 +423,7 @@ export const inspectionAPI = {
         .select('phone')
         .eq('id', inspection.agent_id)
         .single();
-      if (agentUser?.phone) {
-        agentPhone = agentUser.phone;
-      } else {
-        const { data: verifReq } = await supabase
-          .from('agent_verification_requests')
-          .select('agent_phone')
-          .eq('user_id', inspection.agent_id)
-          .eq('status', 'approved')
-          .single();
-        agentPhone = verifReq?.agent_phone || null;
-      }
+      agentPhone = agentUser?.phone || null;
     }
 
     return {
@@ -532,7 +523,6 @@ export const verificationAPI = {
         bank_name: data.bank_name || null,
         account_number: data.account_number || null,
         account_name: data.account_name || null,
-        agent_phone: data.agent_phone || null,
         status: 'pending'
       });
     
@@ -735,7 +725,7 @@ export const paymentAPI = {
         .select('agent_name, agent_id, property_title')
         .eq('id', inspTx.inspection_id)
         .single();
-      // Get agent phone from agent_bank_details or users
+      // Agent phone comes from users.phone — the number they registered with
       let agentPhone = null;
       if (inspection?.agent_id) {
         const { data: agentUser } = await supabase
@@ -743,18 +733,7 @@ export const paymentAPI = {
           .select('phone')
           .eq('id', inspection.agent_id)
           .single();
-        // Fallback: check verification request
-        if (!agentUser?.phone) {
-          const { data: verifReq } = await supabase
-            .from('agent_verification_requests')
-            .select('agent_phone')
-            .eq('user_id', inspection.agent_id)
-            .eq('status', 'approved')
-            .single();
-          agentPhone = verifReq?.agent_phone || null;
-        } else {
-          agentPhone = agentUser.phone;
-        }
+        agentPhone = agentUser?.phone || null;
       }
       return {
         data: {
