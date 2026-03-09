@@ -126,12 +126,11 @@ export function PropertyDetails() {
         email: inspectionEmail,
         phone_number: inspectionPhone,
       }, user);
-      
+
       setShowInspectionDialog(false);
 
-      // Use Korapay inline JS SDK
       const { reference, amount } = response.data;
-      const publicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY;
+      const publicKey = process.env.REACT_APP_KORAPAY_PUBLIC_KEY;
 
       if (window.Korapay) {
         window.Korapay.initialize({
@@ -155,8 +154,7 @@ export function PropertyDetails() {
           },
         });
       } else {
-        // Fallback: redirect to Korapay hosted checkout
-        window.location.href = `https://checkout.korapay.com/checkout?amount=${amount}&currency=NGN&reference=${reference}&merchant=${publicKey}&email=${encodeURIComponent(inspectionEmail)}`;
+        toast.error('Payment system failed to load. Please refresh the page and try again.');
       }
     } catch (error) {
       toast.error(error.message || 'Failed to request inspection');
@@ -311,23 +309,6 @@ export function PropertyDetails() {
             <p className="text-sm text-muted-foreground">Annual Rent</p>
             <p className="text-4xl font-bold text-primary mt-1">{formatPrice(property.price)}</p>
             <p className="text-sm text-muted-foreground">/year</p>
-            <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <p className="text-muted-foreground">Annual Rent</p>
-                <p className="font-medium">{formatPrice(property.price)}</p>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <p className="text-muted-foreground">Agent Fee</p>
-                <p className="font-medium">₦10,000</p>
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                <p className="text-sm font-bold">Total Package</p>
-                <p className="text-sm font-bold text-primary">{formatPrice(property.price + 10000)}</p>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                * Rent is paid to the landlord. Agent fee of ₦10,000 is paid separately to the agent.
-              </p>
-            </div>
           </Card>
 
           {/* Contact Card */}
@@ -395,7 +376,7 @@ export function PropertyDetails() {
           <Card className="p-6">
             <h3 className="font-semibold mb-2">Request Inspection</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Schedule a physical visit with our verified agent for ₦2,000
+              Schedule a physical visit with our verified agent for ₦3,000
             </p>
             <Button
               variant="outline"
@@ -433,7 +414,7 @@ export function PropertyDetails() {
           <DialogHeader>
             <DialogTitle>Request Property Inspection</DialogTitle>
             <DialogDescription>
-              Schedule a physical inspection with our verified agent. Payment of ₦2,000 is required.
+              Schedule a physical inspection with our verified agent. Payment of ₦3,000 is required.
             </DialogDescription>
           </DialogHeader>
 
@@ -480,7 +461,7 @@ export function PropertyDetails() {
             <Card className="p-4 bg-muted/50">
               <div className="flex justify-between items-center">
                 <span className="font-medium">Inspection Fee</span>
-                <span className="text-xl font-bold text-primary">₦2,000</span>
+                <span className="text-xl font-bold text-primary">₦3,000</span>
               </div>
             </Card>
           </div>
