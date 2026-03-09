@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { paymentAPI, inspectionAPI } from '../lib/api';
+import { paymentAPI } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { CheckCircle2, XCircle, Loader2, Phone, Calendar, Home } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 export function PaymentCallback() {
   const [searchParams] = useSearchParams();
@@ -13,7 +13,6 @@ export function PaymentCallback() {
   
   const [status, setStatus] = useState('loading');
   const [paymentDetails, setPaymentDetails] = useState(null);
-  const [agentContact, setAgentContact] = useState(null);
 
   useEffect(() => {
     const verifyPayment = async () => {
@@ -25,21 +24,13 @@ export function PaymentCallback() {
       }
 
       try {
-        const response = await paymentAPI.verify(reference);
+        const response = await paymentAPI.complete(reference);
         setPaymentDetails(response.data);
         
+        // complete() always returns 'completed' or throws
         if (response.data.status === 'completed') {
           setStatus('success');
           await refreshUser();
-          // If inspection payment, fetch agent contact
-          if (response.data.type === 'inspection' && response.data.inspection_id) {
-            try {
-              const contactRes = await inspectionAPI.getAgentContact(response.data.inspection_id);
-              setAgentContact(contactRes.data);
-            } catch (e) { /* silent fail */ }
-          }
-        } else if (response.data.status === 'pending') {
-          setStatus('pending');
         } else {
           setStatus('failed');
         }
@@ -78,55 +69,21 @@ export function PaymentCallback() {
             </div>
             <h2 className="text-2xl font-bold text-green-600 mb-2">Payment Successful!</h2>
             {paymentDetails && (
-              <div className="text-left bg-muted rounded-lg p-4 my-4 space-y-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">Type</p>
-                  <p className="font-medium capitalize">{paymentDetails.type === 'token_purchase' ? 'Token Purchase' : 'Inspection Fee'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Amount</p>
-                  <p className="font-medium">{formatPrice(paymentDetails.amount)}</p>
-                </div>
+              <div className="text-left bg-muted rounded-lg p-4 my-4">
+                <p className="text-sm text-muted-foreground">Type</p>
+                <p className="font-medium capitalize mb-2">
+                  {paymentDetails.type === 'token_purchase' ? 'Token Purchase' : 'Inspection Fee'}
+                </p>
+                <p className="text-sm text-muted-foreground">Amount</p>
+                <p className="font-medium mb-2">{formatPrice(paymentDetails.amount)}</p>
                 {paymentDetails.tokens && (
-                  <div>
-                    <p className="text-xs text-muted-foreground">Tokens Added</p>
+                  <>
+                    <p className="text-sm text-muted-foreground">Tokens Added</p>
                     <p className="font-medium">{paymentDetails.tokens}</p>
-                  </div>
+                  </>
                 )}
               </div>
             )}
-
-            {/* Agent contact card — shown after inspection payment */}
-            {agentContact && (
-              <div className="mt-2 mb-2 rounded-xl border border-primary/30 bg-primary/5 p-4 text-left">
-                <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Your Agent's Contact</p>
-                {agentContact.property_title && (
-                  <div className="flex items-start gap-2 mb-2">
-                    <Home className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <p className="text-sm font-medium">{agentContact.property_title}</p>
-                  </div>
-                )}
-                {agentContact.inspection_date && (
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <p className="text-sm">{agentContact.inspection_date}</p>
-                  </div>
-                )}
-                <div className="rounded-lg bg-white border p-3">
-                  <p className="font-semibold text-sm">{agentContact.agent_name}</p>
-                  {agentContact.agent_phone ? (
-                    <a href={`tel:${agentContact.agent_phone}`}
-                      className="flex items-center gap-2 mt-2 text-primary font-bold text-base hover:underline">
-                      <Phone className="w-4 h-4" /> {agentContact.agent_phone}
-                    </a>
-                  ) : (
-                    <p className="text-xs text-muted-foreground mt-1">Agent phone not available — check your profile for contact details</p>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">Save this number — contact the agent to confirm your inspection date.</p>
-              </div>
-            )}
-
             <div className="flex gap-3 mt-4">
               <Button variant="outline" className="flex-1" onClick={() => navigate('/profile')}>
                 View Profile
