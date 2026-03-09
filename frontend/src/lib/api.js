@@ -406,36 +406,6 @@ export const inspectionAPI = {
     return { data };
   },
 
-  getAgentContact: async (inspectionId) => {
-    const { data: inspection, error } = await supabase
-      .from('inspections')
-      .select('agent_id, agent_name, property_title, inspection_date')
-      .eq('id', inspectionId)
-      .single();
-
-    if (error || !inspection) throw new Error('Inspection not found');
-
-    // Agent phone comes from users.phone — the number they registered with
-    let agentPhone = null;
-    if (inspection.agent_id) {
-      const { data: agentUser } = await supabase
-        .from('users')
-        .select('phone')
-        .eq('id', inspection.agent_id)
-        .single();
-      agentPhone = agentUser?.phone || null;
-    }
-
-    return {
-      data: {
-        agent_name: inspection.agent_name,
-        agent_phone: agentPhone,
-        property_title: inspection.property_title,
-        inspection_date: inspection.inspection_date,
-      }
-    };
-  },
-
   update: async (id, updateData) => {
     const { error } = await supabase
       .from('inspections')
@@ -517,12 +487,7 @@ export const verificationAPI = {
         user_email: user.email,
         id_card_url: data.id_card_url,
         selfie_url: data.selfie_url,
-        agreement_url: data.agreement_url || null,
         address: data.address,
-        bank_code: data.bank_code || null,
-        bank_name: data.bank_name || null,
-        account_number: data.account_number || null,
-        account_name: data.account_name || null,
         status: 'pending'
       });
     
@@ -598,7 +563,7 @@ export const userAPI = {
   getAll: async () => {
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, full_name, role, suspended, created_at, phone')
+      .select('id, email, full_name, role, suspended, created_at')
       .order('created_at', { ascending: false });
     
     if (error) throw error;
@@ -608,7 +573,7 @@ export const userAPI = {
   getById: async (userId) => {
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, full_name, role, suspended, created_at, phone')
+      .select('id, email, full_name, role, suspended, created_at')
       .eq('id', userId)
       .single();
     
@@ -719,31 +684,11 @@ export const paymentAPI = {
       .single();
     
     if (inspTx) {
-      // Get inspection details to return agent info
-      const { data: inspection } = await supabase
-        .from('inspections')
-        .select('agent_name, agent_id, property_title')
-        .eq('id', inspTx.inspection_id)
-        .single();
-      // Agent phone comes from users.phone — the number they registered with
-      let agentPhone = null;
-      if (inspection?.agent_id) {
-        const { data: agentUser } = await supabase
-          .from('users')
-          .select('phone')
-          .eq('id', inspection.agent_id)
-          .single();
-        agentPhone = agentUser?.phone || null;
-      }
       return {
         data: {
           type: 'inspection',
           status: inspTx.status,
-          amount: inspTx.amount,
-          inspection_id: inspTx.inspection_id,
-          agent_name: inspection?.agent_name || null,
-          agent_phone: agentPhone,
-          property_title: inspection?.property_title || null,
+          amount: inspTx.amount
         }
       };
     }
@@ -825,115 +770,147 @@ export const storageAPI = {
       .getPublicUrl(fileName);
     
     return { data: { url: publicUrl, path: data.path } };
-  },
-
-  // Used by BecomeAgent.jsx — uploads to dedicated verification bucket
-  uploadFile: async (file, folder = 'verification') => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${folder}-${uuidv4()}.${fileExt}`;
-    const bucket = 'verification';
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, file);
-
-    if (error) throw error;
-
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(fileName);
-
-    return { data: { url: publicUrl, path: data.path } };
   }
 };
 
-// ============== REVIEW APIs ==============
 
-export const reviewAPI = {
-  submit: async (data, user) => {
-    const { error } = await supabase
-      .from('property_reviews')
-      .insert({
-        id: uuidv4(),
-        property_id: data.property_id,
-        user_id: user.id,
-        user_name: user.full_name,
-        rating: data.rating,
-        comment: data.comment,
-      });
-    if (error) throw error;
-    return { data: { message: 'Review submitted' } };
+// ============== AGENT BALANCE APIs ==============
+
+export const balanceAPI = {
+  getMyBalance: async (agentId) => {
+    const { data, error } = await supabase
+      .from('agent_balances')
+      .select('*')
+      .eq('agent_id', agentId)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    // Return zeroed balance if no record yet
+    return {
+      data: data || {
+        agent_id: agentId,
+        total_earned: 0,
+        total_withdrawn: 0,
+      }
+    };
   },
 
-  getByProperty: async (propertyId) => {
+  getAllBalances: async () => {
     const { data, error } = await supabase
-      .from('property_reviews')
+      .from('agent_balances')
       .select('*')
-      .eq('property_id', propertyId)
-      .order('created_at', { ascending: false });
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    return { data: data || [] };
+  },
+};
+
+// ============== WITHDRAWAL APIs ==============
+
+export const withdrawalAPI = {
+  request: async ({ agentId, agentName, agentEmail, amount, bankName, accountNumber, accountName }) => {
+    // Double-check agent cannot request more than available balance
+    const { data: bal } = await supabase
+      .from('agent_balances')
+      .select('total_earned, total_withdrawn')
+      .eq('agent_id', agentId)
+      .single();
+
+    const available = (bal?.total_earned || 0) - (bal?.total_withdrawn || 0);
+    if (amount > available) throw new Error('Amount exceeds available balance');
+
+    const { data, error } = await supabase
+      .from('withdrawal_requests')
+      .insert({
+        agent_id: agentId,
+        agent_name: agentName,
+        agent_email: agentEmail,
+        amount,
+        bank_name: bankName,
+        account_number: accountNumber,
+        account_name: accountName,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
     if (error) throw error;
     return { data };
   },
 
-  deleteReview: async (id) => {
-    const { error } = await supabase
-      .from('property_reviews')
-      .delete()
-      .eq('id', id);
+  getMyRequests: async (agentId) => {
+    const { data, error } = await supabase
+      .from('withdrawal_requests')
+      .select('*')
+      .eq('agent_id', agentId)
+      .order('requested_at', { ascending: false });
     if (error) throw error;
-    return { data: { message: 'Review deleted' } };
-  },
-};
-
-// ============== CONTACT APIs ==============
-
-export const contactAPI = {
-  submit: async (data) => {
-    const { error } = await supabase
-      .from('contact_messages')
-      .insert({
-        name: data.name,
-        email: data.email,
-        subject: data.subject,
-        message: data.message,
-        status: 'unread',
-      });
-    if (error) throw error;
-    return { data: { message: 'Message submitted' } };
+    return { data: data || [] };
   },
 
   getAll: async () => {
     const { data, error } = await supabase
-      .from('contact_messages')
+      .from('withdrawal_requests')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('requested_at', { ascending: false });
     if (error) throw error;
-    return { data };
+    return { data: data || [] };
   },
 
-  markRead: async (id) => {
-    const { error } = await supabase
-      .from('contact_messages')
-      .update({ status: 'read' })
-      .eq('id', id);
-    if (error) throw error;
-    return { data: { message: 'Marked as read' } };
+  markPaid: async (requestId, adminId) => {
+    // Fetch request first
+    const { data: req, error: fetchErr } = await supabase
+      .from('withdrawal_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+    if (fetchErr || !req) throw new Error('Request not found');
+
+    // Update request to paid
+    const { error: updateErr } = await supabase
+      .from('withdrawal_requests')
+      .update({
+        status: 'paid',
+        resolved_at: new Date().toISOString(),
+        resolved_by: adminId,
+      })
+      .eq('id', requestId);
+    if (updateErr) throw updateErr;
+
+    // Deduct from agent balance
+    const { data: bal } = await supabase
+      .from('agent_balances')
+      .select('total_withdrawn')
+      .eq('agent_id', req.agent_id)
+      .single();
+
+    await supabase
+      .from('agent_balances')
+      .update({
+        total_withdrawn: (bal?.total_withdrawn || 0) + req.amount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('agent_id', req.agent_id);
+
+    return { data: { message: 'Marked as paid, balance updated' } };
   },
 
-  delete: async (id) => {
+  reject: async (requestId, adminId, notes = '') => {
     const { error } = await supabase
-      .from('contact_messages')
-      .delete()
-      .eq('id', id);
+      .from('withdrawal_requests')
+      .update({
+        status: 'rejected',
+        resolved_at: new Date().toISOString(),
+        resolved_by: adminId,
+        notes,
+      })
+      .eq('id', requestId);
     if (error) throw error;
-    return { data: { message: 'Message deleted' } };
+    return { data: { message: 'Request rejected' } };
   },
 };
 
 export default {
   propertyAPI,
-  reviewAPI,
-  contactAPI,
   walletAPI,
   tokenAPI,
   unlockAPI,
@@ -943,5 +920,7 @@ export default {
   userAPI,
   adminAPI,
   paymentAPI,
-  storageAPI
+  storageAPI,
+  balanceAPI,
+  withdrawalAPI
 };
