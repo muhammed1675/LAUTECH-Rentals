@@ -272,13 +272,14 @@ export function PropertyDetails() {
             <p className="text-sm text-muted-foreground">Annual Rent</p>
             <p className="text-4xl font-bold text-primary mt-1">{formatPrice(property.price)}</p>
             <p className="text-sm text-muted-foreground">/year</p>
-            <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Agent Fee</p>
-              <p className="text-sm font-semibold text-foreground">₦10,000</p>
-            </div>
-            <div className="flex items-center justify-between mt-1.5">
-              <p className="text-xs font-semibold text-muted-foreground">Total to pay</p>
-              <p className="text-sm font-bold text-primary">{formatPrice(property.price + 10000)}</p>
+            <div className="mt-3 pt-3 border-t border-border/50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Agent Fee</p>
+                <p className="text-sm font-semibold">₦10,000</p>
+              </div>
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mt-2 leading-relaxed">
+                ⚠ Agent fee is paid <strong>directly to the agent</strong> — separate from the annual rent
+              </p>
             </div>
           </Card>
 
