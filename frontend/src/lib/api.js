@@ -909,6 +909,91 @@ export const withdrawalAPI = {
   },
 };
 
+
+// ============== REVIEW APIs ==============
+
+export const reviewAPI = {
+  submit: async (data, user) => {
+    const { error } = await supabase
+      .from('property_reviews')
+      .insert({
+        id: uuidv4(),
+        property_id: data.property_id,
+        user_id: user.id,
+        user_name: user.full_name,
+        rating: data.rating,
+        comment: data.comment,
+      });
+    if (error) throw error;
+    return { data: { message: 'Review submitted' } };
+  },
+
+  getByProperty: async (propertyId) => {
+    const { data, error } = await supabase
+      .from('property_reviews')
+      .select('*')
+      .eq('property_id', propertyId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { data };
+  },
+
+  deleteReview: async (id) => {
+    const { error } = await supabase
+      .from('property_reviews')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return { data: { message: 'Review deleted' } };
+  },
+};
+
+
+// ============== CONTACT APIs ==============
+
+export const contactAPI = {
+  submit: async (data) => {
+    const { error } = await supabase
+      .from('contact_messages')
+      .insert({
+        name: data.name,
+        email: data.email,
+        subject: data.subject,
+        message: data.message,
+        status: 'unread',
+      });
+    if (error) throw error;
+    return { data: { message: 'Message submitted' } };
+  },
+
+  getAll: async () => {
+    const { data, error } = await supabase
+      .from('contact_messages')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { data };
+  },
+
+  markRead: async (id) => {
+    const { error } = await supabase
+      .from('contact_messages')
+      .update({ status: 'read' })
+      .eq('id', id);
+    if (error) throw error;
+    return { data: { message: 'Marked as read' } };
+  },
+
+  delete: async (id) => {
+    const { error } = await supabase
+      .from('contact_messages')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return { data: { message: 'Message deleted' } };
+  },
+};
+
 export default {
   propertyAPI,
   walletAPI,
@@ -922,5 +1007,7 @@ export default {
   paymentAPI,
   storageAPI,
   balanceAPI,
-  withdrawalAPI
+  withdrawalAPI,
+  reviewAPI,
+  contactAPI
 };
