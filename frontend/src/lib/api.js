@@ -995,25 +995,30 @@ export const contactAPI = {
 
 export const balanceAPI = {
   getMyBalance: async (agentId) => {
-    const balRes = await supabase
-      .from('agent_balances')
-      .select('*')
-      .eq('agent_id', agentId)
-      .limit(1);
-    if (balRes.error) throw balRes.error;
-    const data = balRes.data?.[0] || null;
-    if (!data) return { data: { total_earned: 0, total_withdrawn: 0, available: 0 } };
-    const available = Number(data.total_earned || 0) - Number(data.total_withdrawn || 0);
-    return { data: { ...data, available } };
+    try {
+      const SUPA_URL = process.env.REACT_APP_SUPABASE_URL;
+      const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+      let token = SUPA_KEY;
+      try { const ref = SUPA_URL.split('//')[1].split('.')[0]; const s = localStorage.getItem(`sb-${ref}-auth-token`); if (s) { const p = JSON.parse(s); token = p?.access_token || p?.session?.access_token || SUPA_KEY; } } catch {}
+      const res = await fetch(`${SUPA_URL}/rest/v1/agent_balances?agent_id=eq.${agentId}&limit=1`, { headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${token}` } });
+      const rows = res.ok ? await res.json() : [];
+      const data = rows?.[0] || null;
+      if (!data) return { data: { total_earned: 0, total_withdrawn: 0, available: 0 } };
+      const available = Number(data.total_earned || 0) - Number(data.total_withdrawn || 0);
+      return { data: { ...data, available } };
+    } catch { return { data: { total_earned: 0, total_withdrawn: 0, available: 0 } }; }
   },
 
   getAllBalances: async () => {
-    const res = await supabase
-      .from('agent_balances')
-      .select('*')
-      .order('total_earned', { ascending: false });
-    if (res.error) { console.warn('agent_balances:', res.error.message); return { data: [] }; }
-    return { data: res.data || [] };
+    try {
+      const SUPA_URL = process.env.REACT_APP_SUPABASE_URL;
+      const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+      let token = SUPA_KEY;
+      try { const ref = SUPA_URL.split('//')[1].split('.')[0]; const s = localStorage.getItem(`sb-${ref}-auth-token`); if (s) { const p = JSON.parse(s); token = p?.access_token || p?.session?.access_token || SUPA_KEY; } } catch {}
+      const res = await fetch(`${SUPA_URL}/rest/v1/agent_balances?order=total_earned.desc`, { headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${token}` } });
+      const data = res.ok ? await res.json() : [];
+      return { data: Array.isArray(data) ? data : [] };
+    } catch { return { data: [] }; }
   },
 };
 
@@ -1021,38 +1026,40 @@ export const balanceAPI = {
 
 export const withdrawalAPI = {
   request: async ({ agentId, agentName, agentEmail, amount, bankName, accountNumber, accountName }) => {
-    // Check available balance
-    const balRes = await supabase
-      .from('agent_balances')
-      .select('total_earned, total_withdrawn')
-      .eq('agent_id', agentId)
-      .limit(1);
-    const bal = balRes.data?.[0] || null;
-    const available = Number(bal?.total_earned || 0) - Number(bal?.total_withdrawn || 0);
-    if (amount > available) throw new Error(`Amount exceeds available balance (₦${available.toLocaleString('en-NG')})`);
-
-    // Use raw fetch with token read directly from localStorage (no extra Supabase HTTP call)
     const SUPA_URL = process.env.REACT_APP_SUPABASE_URL;
     const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-    // Get JWT from localStorage without triggering another supabase HTTP call
+    // Get auth token from localStorage — avoids all Supabase client body-stream issues
     let token = SUPA_KEY;
     try {
-      const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-      if (storageKey) {
-        const stored = JSON.parse(localStorage.getItem(storageKey));
-        token = stored?.access_token || SUPA_KEY;
+      const projectRef = SUPA_URL.split('//')[1].split('.')[0];
+      const stored = localStorage.getItem(`sb-${projectRef}-auth-token`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        token = parsed?.access_token || parsed?.session?.access_token || SUPA_KEY;
       }
     } catch { /* use anon key */ }
 
-    const rawRes = await fetch(`${SUPA_URL}/rest/v1/withdrawal_requests`, {
+    const headers = {
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': `Bearer ${token}`,
+    };
+
+    // 1. Check available balance via raw fetch
+    const balFetch = await fetch(
+      `${SUPA_URL}/rest/v1/agent_balances?agent_id=eq.${agentId}&select=total_earned,total_withdrawn&limit=1`,
+      { headers }
+    );
+    const balData = balFetch.ok ? await balFetch.json() : [];
+    const bal = balData?.[0] || null;
+    const available = Number(bal?.total_earned || 0) - Number(bal?.total_withdrawn || 0);
+    if (amount > available) throw new Error(`Amount exceeds available balance (₦${available.toLocaleString('en-NG')})`);
+
+    // 2. Insert withdrawal request via raw fetch
+    const insertFetch = await fetch(`${SUPA_URL}/rest/v1/withdrawal_requests`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPA_KEY,
-        'Authorization': `Bearer ${token}`,
-        'Prefer': 'return=minimal',
-      },
+      headers: { ...headers, 'Prefer': 'return=minimal' },
       body: JSON.stringify({
         agent_id: agentId,
         agent_name: agentName,
@@ -1066,9 +1073,9 @@ export const withdrawalAPI = {
       }),
     });
 
-    if (!rawRes.ok) {
-      const errText = await rawRes.text();
-      let errMsg = `HTTP ${rawRes.status}`;
+    if (!insertFetch.ok) {
+      const errText = await insertFetch.text();
+      let errMsg = `HTTP ${insertFetch.status}`;
       try {
         const errJson = JSON.parse(errText);
         errMsg = errJson.message || errJson.error || errText;
@@ -1081,66 +1088,93 @@ export const withdrawalAPI = {
     return { data: { ok: true } };
   },
 
+
   getMyRequests: async (agentId) => {
-    const res = await supabase
-      .from('withdrawal_requests')
-      .select('*')
-      .eq('agent_id', agentId)
-      .order('requested_at', { ascending: false });
-    // Return empty array on error (e.g. table not yet created)
-    if (res.error) { console.warn('withdrawal_requests:', res.error.message); return { data: [] }; }
-    return { data: res.data || [] };
+    try {
+      const SUPA_URL = process.env.REACT_APP_SUPABASE_URL;
+      const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+      let token = SUPA_KEY;
+      try {
+        const ref = SUPA_URL.split('//')[1].split('.')[0];
+        const stored = localStorage.getItem(`sb-${ref}-auth-token`);
+        if (stored) { const p = JSON.parse(stored); token = p?.access_token || p?.session?.access_token || SUPA_KEY; }
+      } catch { /* use anon */ }
+      const res = await fetch(
+        `${SUPA_URL}/rest/v1/withdrawal_requests?agent_id=eq.${agentId}&order=requested_at.desc`,
+        { headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${token}` } }
+      );
+      const data = res.ok ? await res.json() : [];
+      return { data: Array.isArray(data) ? data : [] };
+    } catch { return { data: [] }; }
   },
 
   getAll: async () => {
-    const res = await supabase
-      .from('withdrawal_requests')
-      .select('*')
-      .order('requested_at', { ascending: false });
-    if (res.error) { console.warn('withdrawal_requests:', res.error.message); return { data: [] }; }
-    return { data: res.data || [] };
+    try {
+      const SUPA_URL = process.env.REACT_APP_SUPABASE_URL;
+      const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+      let token = SUPA_KEY;
+      try {
+        const ref = SUPA_URL.split('//')[1].split('.')[0];
+        const stored = localStorage.getItem(`sb-${ref}-auth-token`);
+        if (stored) { const p = JSON.parse(stored); token = p?.access_token || p?.session?.access_token || SUPA_KEY; }
+      } catch { /* use anon */ }
+      const res = await fetch(
+        `${SUPA_URL}/rest/v1/withdrawal_requests?order=requested_at.desc`,
+        { headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${token}` } }
+      );
+      const data = res.ok ? await res.json() : [];
+      return { data: Array.isArray(data) ? data : [] };
+    } catch { return { data: [] }; }
   },
 
   markPaid: async (requestId, adminId) => {
-    // Get the request first
-    const reqRes = await supabase
-      .from('withdrawal_requests')
-      .select('*')
-      .eq('id', requestId)
-      .limit(1);
-    if (reqRes.error) throw reqRes.error;
-    const req = reqRes.data?.[0] || null;
+    const SUPA_URL = process.env.REACT_APP_SUPABASE_URL;
+    const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    let token = SUPA_KEY;
+    try { const ref = SUPA_URL.split('//')[1].split('.')[0]; const s = localStorage.getItem(`sb-${ref}-auth-token`); if (s) { const p = JSON.parse(s); token = p?.access_token || p?.session?.access_token || SUPA_KEY; } } catch {}
+    const hdrs = { 'Content-Type': 'application/json', 'apikey': SUPA_KEY, 'Authorization': `Bearer ${token}` };
+
+    // Get the request
+    const reqFetch = await fetch(`${SUPA_URL}/rest/v1/withdrawal_requests?id=eq.${requestId}&limit=1`, { headers: hdrs });
+    const reqRows = reqFetch.ok ? await reqFetch.json() : [];
+    const req = reqRows?.[0] || null;
     if (!req) throw new Error('Withdrawal request not found');
 
-    // Update status
-    const { error: updErr } = await supabase
-      .from('withdrawal_requests')
-      .update({ status: 'paid', resolved_at: new Date().toISOString(), resolved_by: adminId })
-      .eq('id', requestId);
-    if (updErr) throw updErr;
+    // Mark as paid
+    const updFetch = await fetch(`${SUPA_URL}/rest/v1/withdrawal_requests?id=eq.${requestId}`, {
+      method: 'PATCH',
+      headers: { ...hdrs, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: 'paid', resolved_at: new Date().toISOString(), resolved_by: adminId }),
+    });
+    if (!updFetch.ok) { const t = await updFetch.text(); throw new Error(t); }
 
-    // Add to total_withdrawn in agent_balances
-    const balRes2 = await supabase
-      .from('agent_balances')
-      .select('total_withdrawn')
-      .eq('agent_id', req.agent_id)
-      .limit(1);
-    const bal = balRes2.data?.[0] || null;
+    // Get current balance
+    const balFetch = await fetch(`${SUPA_URL}/rest/v1/agent_balances?agent_id=eq.${req.agent_id}&limit=1`, { headers: hdrs });
+    const balRows = balFetch.ok ? await balFetch.json() : [];
+    const bal = balRows?.[0] || null;
     const newWithdrawn = Number(bal?.total_withdrawn || 0) + Number(req.amount);
-    await supabase
-      .from('agent_balances')
-      .update({ total_withdrawn: newWithdrawn, updated_at: new Date().toISOString() })
-      .eq('agent_id', req.agent_id);
+
+    // Update balance
+    await fetch(`${SUPA_URL}/rest/v1/agent_balances?agent_id=eq.${req.agent_id}`, {
+      method: 'PATCH',
+      headers: { ...hdrs, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ total_withdrawn: newWithdrawn, updated_at: new Date().toISOString() }),
+    });
 
     return { data: { ok: true } };
   },
 
   reject: async (requestId, adminId, notes) => {
-    const { error } = await supabase
-      .from('withdrawal_requests')
-      .update({ status: 'rejected', resolved_at: new Date().toISOString(), resolved_by: adminId, notes: notes || null })
-      .eq('id', requestId);
-    if (error) throw error;
+    const SUPA_URL = process.env.REACT_APP_SUPABASE_URL;
+    const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    let token = SUPA_KEY;
+    try { const ref = SUPA_URL.split('//')[1].split('.')[0]; const s = localStorage.getItem(`sb-${ref}-auth-token`); if (s) { const p = JSON.parse(s); token = p?.access_token || p?.session?.access_token || SUPA_KEY; } } catch {}
+    const res = await fetch(`${SUPA_URL}/rest/v1/withdrawal_requests?id=eq.${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY, 'Authorization': `Bearer ${token}`, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: 'rejected', resolved_at: new Date().toISOString(), resolved_by: adminId, notes: notes || null }),
+    });
+    if (!res.ok) { const t = await res.text(); throw new Error(t); }
     return { data: { ok: true } };
   },
 };
