@@ -1044,7 +1044,13 @@ export const withdrawalAPI = {
         status: 'pending',
         requested_at: new Date().toISOString(),
       });
-    if (insertRes.error) throw new Error(insertRes.error.message);
+    if (insertRes.error) {
+      const msg = insertRes.error.message || 'Insert failed';
+      const detail = insertRes.error.details || '';
+      const hint = insertRes.error.hint || '';
+      const code = insertRes.error.code || '';
+      throw new Error(`[${code}] ${msg}${detail ? ' — ' + detail : ''}${hint ? ' | Hint: ' + hint : ''}`);
+    }
     return { data: { ok: true } };
   },
 
