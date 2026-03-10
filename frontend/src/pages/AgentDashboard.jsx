@@ -149,23 +149,23 @@ export function AgentDashboard() {
   const fetchBankDetails = async () => {
     if (!user) return;
     try {
-      // Load approved bank details from dedicated source-of-truth table
-      const { data: bankRow } = await supabase
+      // Use .limit(1) + data[0] instead of .maybeSingle() to avoid body-stream-read error
+      const bankRes = await supabase
         .from('agent_bank_details')
         .select('bank_code, bank_name, account_number, account_name')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .limit(1);
+      const bankRow = bankRes.data?.[0] || null;
       if (bankRow?.bank_name) setBankDetails(bankRow);
 
-      // Load any pending bank change request
-      const { data: pending } = await supabase
+      const pendingRes = await supabase
         .from('agent_bank_change_requests')
         .select('bank_code, bank_name, account_number, account_name, created_at')
         .eq('user_id', user.id)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      const pending = pendingRes.data?.[0] || null;
       if (pending?.bank_name) setPendingBankDetails(pending);
     } catch (e) { /* ignore */ }
   };
