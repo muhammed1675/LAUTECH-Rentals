@@ -1031,11 +1031,19 @@ export const withdrawalAPI = {
     const available = Number(bal?.total_earned || 0) - Number(bal?.total_withdrawn || 0);
     if (amount > available) throw new Error(`Amount exceeds available balance (₦${available.toLocaleString('en-NG')})`);
 
-    // Use raw fetch so we can read the real error from the response body
+    // Use raw fetch with token read directly from localStorage (no extra Supabase HTTP call)
     const SUPA_URL = process.env.REACT_APP_SUPABASE_URL;
     const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || SUPA_KEY;
+
+    // Get JWT from localStorage without triggering another supabase HTTP call
+    let token = SUPA_KEY;
+    try {
+      const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      if (storageKey) {
+        const stored = JSON.parse(localStorage.getItem(storageKey));
+        token = stored?.access_token || SUPA_KEY;
+      }
+    } catch { /* use anon key */ }
 
     const rawRes = await fetch(`${SUPA_URL}/rest/v1/withdrawal_requests`, {
       method: 'POST',
