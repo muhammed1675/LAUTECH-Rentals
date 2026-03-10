@@ -984,6 +984,124 @@ export const contactAPI = {
   },
 };
 
+
+// ============== BALANCE APIs ==============
+
+export const balanceAPI = {
+  getMyBalance: async (agentId) => {
+    const { data, error } = await supabase
+      .from('agent_balances')
+      .select('*')
+      .eq('agent_id', agentId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { data: { total_earned: 0, total_withdrawn: 0, available: 0 } };
+    const available = Number(data.total_earned || 0) - Number(data.total_withdrawn || 0);
+    return { data: { ...data, available } };
+  },
+
+  getAllBalances: async () => {
+    const { data, error } = await supabase
+      .from('agent_balances')
+      .select('*')
+      .order('total_earned', { ascending: false });
+    if (error) throw error;
+    return { data: data || [] };
+  },
+};
+
+// ============== WITHDRAWAL APIs ==============
+
+export const withdrawalAPI = {
+  request: async ({ agentId, agentName, agentEmail, amount, bankName, accountNumber, accountName }) => {
+    // Check available balance
+    const { data: bal } = await supabase
+      .from('agent_balances')
+      .select('total_earned, total_withdrawn')
+      .eq('agent_id', agentId)
+      .maybeSingle();
+    const available = Number(bal?.total_earned || 0) - Number(bal?.total_withdrawn || 0);
+    if (amount > available) throw new Error('Amount exceeds available balance');
+
+    const { data, error } = await supabase
+      .from('withdrawal_requests')
+      .insert({
+        agent_id: agentId,
+        agent_name: agentName,
+        agent_email: agentEmail,
+        amount,
+        bank_name: bankName,
+        account_number: accountNumber,
+        account_name: accountName,
+        status: 'pending',
+        requested_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return { data };
+  },
+
+  getMyRequests: async (agentId) => {
+    const { data, error } = await supabase
+      .from('withdrawal_requests')
+      .select('*')
+      .eq('agent_id', agentId)
+      .order('requested_at', { ascending: false });
+    if (error) throw error;
+    return { data: data || [] };
+  },
+
+  getAll: async () => {
+    const { data, error } = await supabase
+      .from('withdrawal_requests')
+      .select('*')
+      .order('requested_at', { ascending: false });
+    if (error) throw error;
+    return { data: data || [] };
+  },
+
+  markPaid: async (requestId, adminId) => {
+    // Get the request first
+    const { data: req, error: reqErr } = await supabase
+      .from('withdrawal_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+    if (reqErr) throw reqErr;
+
+    // Update status
+    const { error: updErr } = await supabase
+      .from('withdrawal_requests')
+      .update({ status: 'paid', resolved_at: new Date().toISOString(), resolved_by: adminId })
+      .eq('id', requestId);
+    if (updErr) throw updErr;
+
+    // Add to total_withdrawn in agent_balances
+    const { data: bal } = await supabase
+      .from('agent_balances')
+      .select('total_withdrawn')
+      .eq('agent_id', req.agent_id)
+      .maybeSingle();
+    const newWithdrawn = Number(bal?.total_withdrawn || 0) + Number(req.amount);
+    await supabase
+      .from('agent_balances')
+      .update({ total_withdrawn: newWithdrawn, updated_at: new Date().toISOString() })
+      .eq('agent_id', req.agent_id);
+
+    return { data: { ok: true } };
+  },
+
+  reject: async (requestId, adminId, notes) => {
+    const { error } = await supabase
+      .from('withdrawal_requests')
+      .update({ status: 'rejected', resolved_at: new Date().toISOString(), resolved_by: adminId, notes: notes || null })
+      .eq('id', requestId);
+    if (error) throw error;
+    return { data: { ok: true } };
+  },
+};
+
 export default {
   propertyAPI,
   reviewAPI,
@@ -997,5 +1115,7 @@ export default {
   userAPI,
   adminAPI,
   paymentAPI,
-  storageAPI
+  storageAPI,
+  balanceAPI,
+  withdrawalAPI
 };
