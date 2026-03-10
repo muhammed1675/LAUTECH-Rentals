@@ -158,7 +158,7 @@ function inspectionEmailHtml({ toAgent, userName, userEmail, userPhone, agentNam
                 <tr><td style="color:#555;font-size:14px">Date Paid</td><td align="right" style="color:#111;font-size:14px">${date}</td></tr>
                 <tr style="border-top:1px solid #bbf7d0">
                   <td style="color:#111;font-size:16px;font-weight:700;padding-top:12px">Amount Paid</td>
-                  <td align="right" style="color:#16a34a;font-size:18px;font-weight:800;padding-top:12px">₦2,000</td>
+                  <td align="right" style="color:#16a34a;font-size:18px;font-weight:800;padding-top:12px">₦3,000</td>
                 </tr>
               </table>
             </td></tr>
