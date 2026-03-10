@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { adminAPI, userAPI, verificationAPI, propertyAPI, inspectionAPI, transactionAPI, contactAPI } from '../lib/api';
+import { adminAPI, userAPI, verificationAPI, propertyAPI, inspectionAPI, transactionAPI, contactAPI, withdrawalAPI, balanceAPI } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -15,7 +15,7 @@ import {
   LayoutDashboard, Users, Shield, Building2, Calendar, Receipt,
   CheckCircle2, XCircle, Eye, Ban, UserCheck, TrendingUp, Coins,
   Search, RefreshCw, Trash2, AlertTriangle, User, FileText,
-  MessageSquare, Mail, Inbox, MailOpen, UserCog, Copy, Phone, CreditCard, Clock
+  MessageSquare, Mail, Inbox, MailOpen, UserCog, Copy, Phone, CreditCard, Clock, Wallet, ArrowDownCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -44,6 +44,10 @@ export function AdminDashboard() {
   const [bankRejectId, setBankRejectId] = useState(null);
   const [agentBankDetails, setAgentBankDetails] = useState([]);
   const [previewProperty, setPreviewProperty] = useState(null);
+  const [withdrawalRequests, setWithdrawalRequests] = useState([]);
+  const [agentBalances, setAgentBalances] = useState([]);
+  const [rejectingWithdrawal, setRejectingWithdrawal] = useState(null);
+  const [rejectNote, setRejectNote] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -54,10 +58,10 @@ export function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [statsRes, usersRes, verificationsRes, propertiesRes, inspectionsRes, txRes, messagesRes] = await Promise.all([
+      const [statsRes, usersRes, verificationsRes, propertiesRes, inspectionsRes, txRes, messagesRes, withdrawalsRes, balancesRes] = await Promise.all([
         adminAPI.getStats(), userAPI.getAll(), verificationAPI.getAll(),
         propertyAPI.getAllAdmin(), inspectionAPI.getAll(), transactionAPI.getAll(),
-        contactAPI.getAll(),
+        contactAPI.getAll(), withdrawalAPI.getAll(), balanceAPI.getAllBalances(),
       ]);
       const allUsers = usersRes.data || [];
       setStats(statsRes.data);
@@ -73,6 +77,8 @@ export function AdminDashboard() {
       setInspections(inspectionsRes.data);
       setTransactions(txRes.data);
       setMessages(messagesRes.data);
+      if (withdrawalsRes?.data) setWithdrawalRequests(withdrawalsRes.data);
+      if (balancesRes?.data) setAgentBalances(balancesRes.data);
       // Load bank change requests (no FK join - enrich from allUsers instead)
       try {
         const { data: bankReqs, error: bankErr } = await supabase
@@ -314,6 +320,12 @@ export function AdminDashboard() {
             </TabsTrigger>
             <TabsTrigger value="transactions" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm whitespace-nowrap">
               <Receipt className="w-4 h-4 shrink-0" /> Transactions
+            </TabsTrigger>
+            <TabsTrigger value="payouts" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm whitespace-nowrap">
+              <Wallet className="w-4 h-4" /><span>Payouts</span>
+              {withdrawalRequests.filter(r => r.status === 'pending').length > 0 && (
+                <Badge className="ml-1 h-5 px-1.5 text-xs bg-red-500 text-white">{withdrawalRequests.filter(r => r.status === 'pending').length}</Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="messages" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm whitespace-nowrap">
               <MessageSquare className="w-4 h-4 shrink-0" /> Messages
@@ -868,6 +880,129 @@ export function AdminDashboard() {
               </div>
             </div>
           )}
+
+        {/* ── Payouts Tab ── */}
+        <TabsContent value="payouts">
+          {/* Summary cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground mb-1">Pending Requests</p>
+              <p className="text-2xl font-bold text-orange-500">{withdrawalRequests.filter(r => r.status === 'pending').length}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground mb-1">Total Paid Out</p>
+              <p className="text-2xl font-bold text-green-600">
+                ₦{withdrawalRequests.filter(r => r.status === 'paid').reduce((s, r) => s + Number(r.amount), 0).toLocaleString('en-NG')}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground mb-1">Total Agent Earnings</p>
+              <p className="text-2xl font-bold">
+                ₦{agentBalances.reduce((s, b) => s + Number(b.total_earned || 0), 0).toLocaleString('en-NG')}
+              </p>
+            </Card>
+          </div>
+
+          {/* Pending requests */}
+          <h3 className="font-semibold mb-3">Pending Withdrawals</h3>
+          {withdrawalRequests.filter(r => r.status === 'pending').length === 0 ? (
+            <Card className="p-8 text-center text-muted-foreground mb-6">No pending withdrawal requests</Card>
+          ) : (
+            <div className="space-y-3 mb-6">
+              {withdrawalRequests.filter(r => r.status === 'pending').map(req => {
+                const agentBal = agentBalances.find(b => b.agent_id === req.agent_id);
+                return (
+                  <Card key={req.id} className="p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="font-semibold">{req.agent_name}</p>
+                        <p className="text-sm text-muted-foreground">{req.agent_email}</p>
+                        <p className="text-lg font-bold text-green-600">₦{Number(req.amount).toLocaleString('en-NG')}</p>
+                        {agentBal && (
+                          <p className="text-xs text-muted-foreground">
+                            Available: ₦{(Number(agentBal.total_earned) - Number(agentBal.total_withdrawn)).toLocaleString('en-NG')}
+                          </p>
+                        )}
+                        <div className="mt-2 p-2 rounded bg-muted text-xs space-y-0.5">
+                          <p className="font-medium">Bank Details</p>
+                          <p>{req.bank_name} — {req.account_number}</p>
+                          <p>{req.account_name}</p>
+                          <button onClick={() => { navigator.clipboard.writeText(req.account_number); toast.success('Copied!'); }}
+                            className="text-primary underline text-xs mt-1">Copy account number</button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{new Date(req.requested_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                      </div>
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <Button size="sm" className="gap-1.5"
+                          onClick={async () => {
+                            try {
+                              await withdrawalAPI.markPaid(req.id, user.id);
+                              toast.success('Marked as paid');
+                              fetchData();
+                            } catch(e) { toast.error(e.message); }
+                          }}>
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Mark Paid
+                        </Button>
+                        {rejectingWithdrawal === req.id ? (
+                          <div className="space-y-1">
+                            <Input placeholder="Reason (optional)" value={rejectNote} onChange={e => setRejectNote(e.target.value)} className="h-8 text-xs" />
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="destructive" className="flex-1 text-xs"
+                                onClick={async () => {
+                                  try {
+                                    await withdrawalAPI.reject(req.id, user.id, rejectNote);
+                                    toast.success('Request rejected');
+                                    setRejectingWithdrawal(null);
+                                    setRejectNote('');
+                                    fetchData();
+                                  } catch(e) { toast.error(e.message); }
+                                }}>Confirm</Button>
+                              <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => { setRejectingWithdrawal(null); setRejectNote(''); }}>Cancel</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40"
+                            onClick={() => setRejectingWithdrawal(req.id)}>
+                            <XCircle className="w-3.5 h-3.5" /> Reject
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {/* History */}
+          <h3 className="font-semibold mb-3">History</h3>
+          <Card className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {withdrawalRequests.filter(r => r.status !== 'pending').length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No history yet</TableCell></TableRow>
+                ) : withdrawalRequests.filter(r => r.status !== 'pending').map(req => (
+                  <TableRow key={req.id}>
+                    <TableCell className="font-medium">{req.agent_name}</TableCell>
+                    <TableCell>₦{Number(req.amount).toLocaleString('en-NG')}</TableCell>
+                    <TableCell><Badge variant={req.status === 'paid' ? 'default' : 'destructive'} className="capitalize">{req.status}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{new Date(req.requested_at).toLocaleDateString('en-NG')}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{req.notes || '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
         </TabsContent>
       </Tabs>
 
