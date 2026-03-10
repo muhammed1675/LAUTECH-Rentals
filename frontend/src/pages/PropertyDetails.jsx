@@ -63,21 +63,6 @@ export function PropertyDetails() {
     }
   };
 
-
-  // Load Korapay inline SDK
-  useEffect(() => {
-    if (document.getElementById('korapay-script')) return;
-    const script = document.createElement('script');
-    script.id = 'korapay-script';
-    script.src = 'https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js';
-    script.async = true;
-    document.body.appendChild(script);
-    return () => {
-      const el = document.getElementById('korapay-script');
-      if (el) document.body.removeChild(el);
-    };
-  }, []);
-
   const handleUnlock = async () => {
     if (!isAuthenticated) {
       toast.error('Please login to unlock contact');
@@ -126,35 +111,13 @@ export function PropertyDetails() {
         email: inspectionEmail,
         phone_number: inspectionPhone,
       }, user);
-
+      
+      toast.success('Redirecting to payment...');
       setShowInspectionDialog(false);
-
-      const { reference, amount } = response.data;
-      const publicKey = process.env.REACT_APP_KORAPAY_PUBLIC_KEY;
-
-      if (window.Korapay) {
-        window.Korapay.initialize({
-          key: publicKey,
-          reference,
-          amount,
-          currency: 'NGN',
-          customer: {
-            email: inspectionEmail,
-            name: user.full_name,
-          },
-          onSuccess: (data) => {
-            toast.success('Payment successful! Redirecting...');
-            navigate(`/payment-callback?reference=${data.reference}&type=inspection`);
-          },
-          onFailed: () => {
-            toast.error('Payment failed. Please try again.');
-          },
-          onClose: () => {
-            toast.info('Payment cancelled.');
-          },
-        });
-      } else {
-        toast.error('Payment system failed to load. Please refresh the page and try again.');
+      
+      // Open checkout URL
+      if (response.data.checkout_url) {
+        window.open(response.data.checkout_url, '_blank');
       }
     } catch (error) {
       toast.error(error.message || 'Failed to request inspection');
@@ -309,6 +272,14 @@ export function PropertyDetails() {
             <p className="text-sm text-muted-foreground">Annual Rent</p>
             <p className="text-4xl font-bold text-primary mt-1">{formatPrice(property.price)}</p>
             <p className="text-sm text-muted-foreground">/year</p>
+            <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Agent Fee</p>
+              <p className="text-sm font-semibold text-foreground">₦10,000</p>
+            </div>
+            <div className="flex items-center justify-between mt-1.5">
+              <p className="text-xs font-semibold text-muted-foreground">Total to pay</p>
+              <p className="text-sm font-bold text-primary">{formatPrice(property.price + 10000)}</p>
+            </div>
           </Card>
 
           {/* Contact Card */}
@@ -376,7 +347,7 @@ export function PropertyDetails() {
           <Card className="p-6">
             <h3 className="font-semibold mb-2">Request Inspection</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Schedule a physical visit with our verified agent for ₦3,000
+              Schedule a physical visit with our verified agent for ₦2,000
             </p>
             <Button
               variant="outline"
@@ -414,7 +385,7 @@ export function PropertyDetails() {
           <DialogHeader>
             <DialogTitle>Request Property Inspection</DialogTitle>
             <DialogDescription>
-              Schedule a physical inspection with our verified agent. Payment of ₦3,000 is required.
+              Schedule a physical inspection with our verified agent. Payment of ₦2,000 is required.
             </DialogDescription>
           </DialogHeader>
 
@@ -461,7 +432,7 @@ export function PropertyDetails() {
             <Card className="p-4 bg-muted/50">
               <div className="flex justify-between items-center">
                 <span className="font-medium">Inspection Fee</span>
-                <span className="text-xl font-bold text-primary">₦3,000</span>
+                <span className="text-xl font-bold text-primary">₦2,000</span>
               </div>
             </Card>
           </div>
