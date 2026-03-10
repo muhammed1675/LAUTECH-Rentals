@@ -648,6 +648,7 @@ export function AgentDashboard() {
               </div>
             )}
           </Card>
+        </TabsContent>
 
         {/* ── Earnings Tab ── */}
         <TabsContent value="earnings">
