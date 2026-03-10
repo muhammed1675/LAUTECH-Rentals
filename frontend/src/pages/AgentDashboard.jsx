@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { propertyAPI, inspectionAPI, storageAPI } from '../lib/api';
+import { propertyAPI, inspectionAPI, storageAPI, balanceAPI, withdrawalAPI } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -12,7 +12,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
-import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X, CreditCard, Copy, Pencil, Phone } from 'lucide-react';
+import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X, CreditCard, Copy, Pencil, Phone, Wallet, TrendingUp, ArrowDownCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FALLBACK_BANKS = [
@@ -105,6 +105,11 @@ export function AgentDashboard() {
   const [editingBank, setEditingBank] = useState(false);
   const [bankForm, setBankForm] = useState({ bank_code: '', bank_name: '', account_number: '', account_name: '' });
   const [savingBank, setSavingBank] = useState(false);
+  const [balance, setBalance] = useState({ total_earned: 0, total_withdrawn: 0, available: 0 });
+  const [withdrawalRequests, setWithdrawalRequests] = useState([]);
+  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false);
 
   // ── Load data on mount ───────────────────────────────────────
   useEffect(() => {
@@ -124,12 +129,16 @@ export function AgentDashboard() {
     if (!user) return;
     setLoading(true);
     try {
-      const [propertiesRes, inspectionsRes] = await Promise.all([
+      const [propertiesRes, inspectionsRes, balanceRes, withdrawalsRes] = await Promise.all([
         propertyAPI.getMyListings(user.id),
         inspectionAPI.getAssigned(user.id),
+        balanceAPI.getMyBalance(user.id),
+        withdrawalAPI.getMyRequests(user.id),
       ]);
       setProperties(propertiesRes.data);
       setInspections(inspectionsRes.data);
+      if (balanceRes?.data) setBalance(balanceRes.data);
+      if (withdrawalsRes?.data) setWithdrawalRequests(withdrawalsRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -300,6 +309,33 @@ export function AgentDashboard() {
 
   if (!isAuthenticated || (!isAgent && !isAdmin)) return null;
 
+  const handleWithdraw = async () => {
+    const amt = parseFloat(withdrawAmount);
+    if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return; }
+    if (amt > balance.available) { toast.error('Amount exceeds available balance'); return; }
+    if (!bankDetails?.account_number) { toast.error('Add your bank account first (Bank Details tab)'); return; }
+    setSubmittingWithdrawal(true);
+    try {
+      await withdrawalAPI.request({
+        agentId: user.id,
+        agentName: user.full_name || user.email,
+        agentEmail: user.email,
+        amount: amt,
+        bankName: bankDetails.bank_name,
+        accountNumber: bankDetails.account_number,
+        accountName: bankDetails.account_name,
+      });
+      toast.success('Withdrawal request submitted! Admin will process it shortly.');
+      setShowWithdrawDialog(false);
+      setWithdrawAmount('');
+      fetchData();
+    } catch (err) {
+      toast.error(err.message || 'Failed to submit withdrawal request');
+    } finally {
+      setSubmittingWithdrawal(false);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-6" data-testid="agent-dashboard">
       {lightbox.open && <Lightbox images={lightbox.images} startIndex={lightbox.index} onClose={closeLightbox} />}
@@ -344,10 +380,11 @@ export function AgentDashboard() {
 
       {/* Tabs */}
       <Tabs defaultValue="properties">
-        <TabsList className="mb-5 w-full grid grid-cols-3">
+        <TabsList className="mb-5 w-full grid grid-cols-4">
           <TabsTrigger value="properties" className="gap-1.5 text-xs sm:text-sm"><Building2 className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">My </span>Properties</TabsTrigger>
           <TabsTrigger value="inspections" className="gap-1.5 text-xs sm:text-sm"><Calendar className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">Assigned </span>Inspections</TabsTrigger>
           <TabsTrigger value="bank" className="gap-1.5 text-xs sm:text-sm"><CreditCard className="w-4 h-4 shrink-0" />Bank Details</TabsTrigger>
+          <TabsTrigger value="earnings" className="gap-1.5 text-xs sm:text-sm"><Wallet className="w-4 h-4 shrink-0" />Earnings</TabsTrigger>
         </TabsList>
 
         {/* ── Properties Tab ── */}
@@ -611,8 +648,108 @@ export function AgentDashboard() {
               </div>
             )}
           </Card>
+
+        {/* ── Earnings Tab ── */}
+        <TabsContent value="earnings">
+          {/* Balance Summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <Card className="p-5 bg-gradient-to-br from-green-500 to-green-700 text-white col-span-1 sm:col-span-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Wallet className="w-4 h-4 opacity-80" />
+                <p className="text-sm opacity-90">Available Balance</p>
+              </div>
+              <p className="text-3xl font-bold">₦{balance.available.toLocaleString('en-NG')}</p>
+            </Card>
+            <Card className="p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="w-4 h-4 text-green-600" />
+                <p className="text-sm text-muted-foreground">Total Earned</p>
+              </div>
+              <p className="text-2xl font-bold">₦{balance.total_earned.toLocaleString('en-NG')}</p>
+            </Card>
+            <Card className="p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <ArrowDownCircle className="w-4 h-4 text-blue-600" />
+                <p className="text-sm text-muted-foreground">Total Withdrawn</p>
+              </div>
+              <p className="text-2xl font-bold">₦{balance.total_withdrawn.toLocaleString('en-NG')}</p>
+            </Card>
+          </div>
+
+          {/* Withdraw button */}
+          <div className="flex justify-end mb-4">
+            <Button
+              onClick={() => setShowWithdrawDialog(true)}
+              disabled={balance.available <= 0}
+              className="gap-2"
+            >
+              <ArrowDownCircle className="w-4 h-4" /> Request Withdrawal
+            </Button>
+          </div>
+
+          {/* Withdrawal history */}
+          <Card className="p-4 sm:p-6">
+            <h3 className="font-semibold mb-4">Withdrawal History</h3>
+            {withdrawalRequests.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No withdrawal requests yet</p>
+            ) : (
+              <div className="space-y-3">
+                {withdrawalRequests.map(req => (
+                  <div key={req.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                    <div>
+                      <p className="font-medium text-sm">₦{Number(req.amount).toLocaleString('en-NG')}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(req.requested_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    </div>
+                    <Badge variant={req.status === 'paid' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'} className="capitalize">
+                      {req.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Withdrawal Dialog */}
+      <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Withdrawal</DialogTitle>
+            <DialogDescription>
+              Funds will be sent to your registered bank account. Admin will process within 1–2 business days.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {bankDetails ? (
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm">
+                <p className="font-medium text-blue-800">{bankDetails.bank_name}</p>
+                <p className="text-blue-600">{bankDetails.account_number} — {bankDetails.account_name}</p>
+              </div>
+            ) : (
+              <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
+                No bank account set up. Go to Bank Details tab to add one.
+              </div>
+            )}
+            <div>
+              <Label>Amount (₦)</Label>
+              <Input
+                type="number"
+                placeholder={`Max: ₦${balance.available.toLocaleString('en-NG')}`}
+                value={withdrawAmount}
+                onChange={e => setWithdrawAmount(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWithdrawDialog(false)}>Cancel</Button>
+            <Button onClick={handleWithdraw} disabled={submittingWithdrawal || !bankDetails}>
+              {submittingWithdrawal ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting...</> : 'Submit Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Property Dialog */}
       <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
