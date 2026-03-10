@@ -356,15 +356,19 @@ export const inspectionAPI = {
         inspection_id: inspectionId,
         user_id: user.id,
         reference,
-        amount: 3000,
+        amount: 2000,
         status: 'pending'
       });
+    
+    const koralpayPublicKey = process.env.REACT_APP_KORALPAY_PUBLIC_KEY || 'pk_test_xxx';
+    const checkoutUrl = `https://checkout.korapay.com/checkout?amount=2000&currency=NGN&reference=${reference}&merchant=${koralpayPublicKey}&email=${data.email}`;
     
     return {
       data: {
         inspection_id: inspectionId,
         reference,
-        amount: 3000,
+        amount: 2000,
+        checkout_url: checkoutUrl,
         payment_type: 'inspection'
       }
     };
@@ -688,96 +692,6 @@ export const adminAPI = {
 // ============== PAYMENT APIs ==============
 
 export const paymentAPI = {
-  // Called by PaymentCallback after Korapay onSuccess — marks payment completed in DB
-  complete: async (reference) => {
-    // Check token transaction
-    const { data: tokenTx } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-
-    if (tokenTx) {
-      if (tokenTx.status !== 'completed') {
-        await supabase
-          .from('transactions')
-          .update({ status: 'completed' })
-          .eq('reference', reference);
-
-        const { data: wallet } = await supabase
-          .from('wallets')
-          .select('token_balance')
-          .eq('user_id', tokenTx.user_id)
-          .single();
-
-        const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
-        await supabase
-          .from('wallets')
-          .update({ token_balance: newBalance })
-          .eq('user_id', tokenTx.user_id);
-      }
-      return {
-        data: {
-          type: 'token_purchase',
-          status: 'completed',
-          amount: tokenTx.amount,
-          tokens: tokenTx.tokens_added
-        }
-      };
-    }
-
-    // Check inspection transaction
-    const { data: inspTx } = await supabase
-      .from('inspection_transactions')
-      .select('*')
-      .eq('reference', reference)
-      .single();
-
-    if (inspTx) {
-      if (inspTx.status !== 'completed') {
-        await supabase
-          .from('inspection_transactions')
-          .update({ status: 'completed' })
-          .eq('reference', reference);
-
-        await supabase
-          .from('inspections')
-          .update({ payment_status: 'completed', status: 'assigned' })
-          .eq('id', inspTx.inspection_id);
-      }
-
-      const { data: inspection } = await supabase
-        .from('inspections')
-        .select('agent_name, agent_id, property_title')
-        .eq('id', inspTx.inspection_id)
-        .single();
-
-      let agentPhone = null;
-      if (inspection?.agent_id) {
-        const { data: agentUser } = await supabase
-          .from('users')
-          .select('phone')
-          .eq('id', inspection.agent_id)
-          .single();
-        agentPhone = agentUser?.phone || null;
-      }
-
-      return {
-        data: {
-          type: 'inspection',
-          status: 'completed',
-          amount: inspTx.amount,
-          inspection_id: inspTx.inspection_id,
-          agent_name: inspection?.agent_name || null,
-          agent_phone: agentPhone,
-          property_title: inspection?.property_title || null,
-        }
-      };
-    }
-
-    throw new Error('Transaction not found');
-  },
-
   verify: async (reference) => {
     // Check token transaction
     const { data: tokenTx } = await supabase
@@ -1016,124 +930,6 @@ export const contactAPI = {
   },
 };
 
-
-// ============== BALANCE APIs ==============
-
-export const balanceAPI = {
-  getMyBalance: async (agentId) => {
-    const { data, error } = await supabase
-      .from('agent_balances')
-      .select('*')
-      .eq('agent_id', agentId)
-      .maybeSingle();
-    if (error) throw error;
-    return {
-      data: data || {
-        agent_id: agentId,
-        total_earned: 0,
-        total_withdrawn: 0,
-        available: 0
-      }
-    };
-  },
-
-  getAllBalances: async () => {
-    const { data, error } = await supabase
-      .from('agent_balances')
-      .select('*');
-    if (error) throw error;
-    return { data: data || [] };
-  }
-};
-
-// ============== WITHDRAWAL APIs ==============
-
-export const withdrawalAPI = {
-  request: async ({ agentId, agentName, agentEmail, amount, bankName, accountNumber, accountName }) => {
-    // Get current balance
-    const { data: bal } = await supabase
-      .from('agent_balances')
-      .select('total_earned, total_withdrawn')
-      .eq('agent_id', agentId)
-      .maybeSingle();
-    const available = ((bal?.total_earned || 0) - (bal?.total_withdrawn || 0));
-    if (amount > available) throw new Error('Amount exceeds available balance');
-
-    const { error } = await supabase
-      .from('withdrawal_requests')
-      .insert({
-        id: uuidv4(),
-        agent_id: agentId,
-        agent_name: agentName,
-        agent_email: agentEmail,
-        amount,
-        bank_name: bankName,
-        account_number: accountNumber,
-        account_name: accountName,
-        status: 'pending',
-      });
-    if (error) throw error;
-    return { data: { message: 'Withdrawal request submitted' } };
-  },
-
-  getMyRequests: async (agentId) => {
-    const { data, error } = await supabase
-      .from('withdrawal_requests')
-      .select('*')
-      .eq('agent_id', agentId)
-      .order('requested_at', { ascending: false });
-    if (error) throw error;
-    return { data: data || [] };
-  },
-
-  getAll: async () => {
-    const { data, error } = await supabase
-      .from('withdrawal_requests')
-      .select('*')
-      .order('requested_at', { ascending: false });
-    if (error) throw error;
-    return { data: data || [] };
-  },
-
-  markPaid: async (requestId, adminId) => {
-    // Get request amount first
-    const { data: req } = await supabase
-      .from('withdrawal_requests')
-      .select('agent_id, amount')
-      .eq('id', requestId)
-      .single();
-    if (!req) throw new Error('Request not found');
-
-    // Update request status
-    await supabase
-      .from('withdrawal_requests')
-      .update({ status: 'paid', resolved_at: new Date().toISOString(), resolved_by: adminId })
-      .eq('id', requestId);
-
-    // Deduct from total_withdrawn in agent_balances
-    const { data: bal } = await supabase
-      .from('agent_balances')
-      .select('total_withdrawn')
-      .eq('agent_id', req.agent_id)
-      .single();
-    await supabase
-      .from('agent_balances')
-      .update({ total_withdrawn: (bal?.total_withdrawn || 0) + req.amount, updated_at: new Date().toISOString() })
-      .eq('agent_id', req.agent_id);
-
-    return { data: { message: 'Marked as paid' } };
-  },
-
-  reject: async (requestId, adminId, notes = '') => {
-    const { error } = await supabase
-      .from('withdrawal_requests')
-      .update({ status: 'rejected', resolved_at: new Date().toISOString(), resolved_by: adminId, notes })
-      .eq('id', requestId);
-    if (error) throw error;
-    return { data: { message: 'Request rejected' } };
-  },
-};
-
 export default {
   propertyAPI,
   reviewAPI,
@@ -1147,7 +943,5 @@ export default {
   userAPI,
   adminAPI,
   paymentAPI,
-  storageAPI,
-  balanceAPI,
-  withdrawalAPI
+  storageAPI
 };
