@@ -694,11 +694,12 @@ export const adminAPI = {
 export const paymentAPI = {
   verify: async (reference) => {
     // Check token transaction
-    const { data: tokenTx } = await supabase
+    const tokenVerifyRes = await supabase
       .from('transactions')
       .select('*')
       .eq('reference', reference)
-      .single();
+      .limit(1);
+    const tokenTx = tokenVerifyRes.data?.[0] || null;
     
     if (tokenTx) {
       return {
@@ -712,27 +713,28 @@ export const paymentAPI = {
     }
     
     // Check inspection transaction
-    const { data: inspTx } = await supabase
+    const inspVerifyRes = await supabase
       .from('inspection_transactions')
       .select('*')
       .eq('reference', reference)
-      .single();
+      .limit(1);
+    const inspTx = inspVerifyRes.data?.[0] || null;
     
     if (inspTx) {
-      // Get inspection details to return agent info
-      const { data: inspection } = await supabase
+      const inspDetailVerifyRes = await supabase
         .from('inspections')
         .select('agent_name, agent_id, property_title')
         .eq('id', inspTx.inspection_id)
-        .single();
-      // Agent phone comes from users.phone — the number they registered with
+        .limit(1);
+      const inspection = inspDetailVerifyRes.data?.[0] || null;
       let agentPhone = null;
       if (inspection?.agent_id) {
-        const { data: agentUser } = await supabase
+        const agentVerifyRes = await supabase
           .from('users')
           .select('phone')
           .eq('id', inspection.agent_id)
-          .single();
+          .limit(1);
+        const agentUser = agentVerifyRes.data?.[0] || null;
         agentPhone = agentUser?.phone || null;
       }
       return {
@@ -754,11 +756,13 @@ export const paymentAPI = {
   // Simulate payment for testing
   confirmPayment: async (reference) => {
     // Called by korapay.js onSuccess — marks payment completed in DB
-    const { data: tokenTx } = await supabase
+    // Using .limit(1) + data[0] instead of .single() to avoid body-stream-read errors
+    const tokenRes = await supabase
       .from('transactions')
       .select('*')
       .eq('reference', reference)
-      .single();
+      .limit(1);
+    const tokenTx = tokenRes.data?.[0] || null;
 
     if (tokenTx) {
       if (tokenTx.status !== 'completed') {
@@ -767,11 +771,12 @@ export const paymentAPI = {
           .update({ status: 'completed' })
           .eq('reference', reference);
 
-        const { data: wallet } = await supabase
+        const walletRes = await supabase
           .from('wallets')
           .select('token_balance')
           .eq('user_id', tokenTx.user_id)
-          .single();
+          .limit(1);
+        const wallet = walletRes.data?.[0] || null;
 
         const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
         await supabase
@@ -782,11 +787,12 @@ export const paymentAPI = {
       return { data: { type: 'token_purchase', status: 'completed', amount: tokenTx.amount, tokens: tokenTx.tokens_added } };
     }
 
-    const { data: inspTx } = await supabase
+    const inspRes = await supabase
       .from('inspection_transactions')
       .select('*')
       .eq('reference', reference)
-      .single();
+      .limit(1);
+    const inspTx = inspRes.data?.[0] || null;
 
     if (inspTx) {
       if (inspTx.status !== 'completed') {
@@ -808,11 +814,11 @@ export const paymentAPI = {
 
   simulate: async (reference) => {
     // Check token transaction
-    const { data: tokenTx } = await supabase
+    const tokenTxRes = await supabase
       .from('transactions')
       .select('*')
-      .eq('reference', reference)
-      .single();
+      .eq('reference', reference).limit(1);
+    const tokenTx = tokenTxRes.data?.[0] || null;
     
     if (tokenTx) {
       await supabase
@@ -821,11 +827,11 @@ export const paymentAPI = {
         .eq('reference', reference);
       
       // Add tokens to wallet
-      const { data: wallet } = await supabase
+      const walletRes = await supabase
         .from('wallets')
         .select('token_balance')
-        .eq('user_id', tokenTx.user_id)
-        .single();
+        .eq('user_id', tokenTx.user_id).limit(1);
+    const wallet = walletRes.data?.[0] || null;
       
       const newBalance = (wallet?.token_balance || 0) + tokenTx.tokens_added;
       await supabase
@@ -837,11 +843,11 @@ export const paymentAPI = {
     }
     
     // Check inspection transaction
-    const { data: inspTx } = await supabase
+    const inspTxRes = await supabase
       .from('inspection_transactions')
       .select('*')
-      .eq('reference', reference)
-      .single();
+      .eq('reference', reference).limit(1);
+    const inspTx = inspTxRes.data?.[0] || null;
     
     if (inspTx) {
       await supabase
@@ -1064,12 +1070,14 @@ export const withdrawalAPI = {
 
   markPaid: async (requestId, adminId) => {
     // Get the request first
-    const { data: req, error: reqErr } = await supabase
+    const reqRes = await supabase
       .from('withdrawal_requests')
       .select('*')
       .eq('id', requestId)
-      .single();
-    if (reqErr) throw reqErr;
+      .limit(1);
+    if (reqRes.error) throw reqRes.error;
+    const req = reqRes.data?.[0] || null;
+    if (!req) throw new Error('Withdrawal request not found');
 
     // Update status
     const { error: updErr } = await supabase
