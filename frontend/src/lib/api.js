@@ -989,12 +989,13 @@ export const contactAPI = {
 
 export const balanceAPI = {
   getMyBalance: async (agentId) => {
-    const { data, error } = await supabase
+    const balRes = await supabase
       .from('agent_balances')
       .select('*')
       .eq('agent_id', agentId)
-      .maybeSingle();
-    if (error) throw error;
+      .limit(1);
+    if (balRes.error) throw balRes.error;
+    const data = balRes.data?.[0] || null;
     if (!data) return { data: { total_earned: 0, total_withdrawn: 0, available: 0 } };
     const available = Number(data.total_earned || 0) - Number(data.total_withdrawn || 0);
     return { data: { ...data, available } };
@@ -1014,16 +1015,17 @@ export const balanceAPI = {
 
 export const withdrawalAPI = {
   request: async ({ agentId, agentName, agentEmail, amount, bankName, accountNumber, accountName }) => {
-    // Check available balance
-    const { data: bal } = await supabase
+    // Check available balance — use array select to avoid maybeSingle body-lock bug
+    const balRes = await supabase
       .from('agent_balances')
       .select('total_earned, total_withdrawn')
       .eq('agent_id', agentId)
-      .maybeSingle();
+      .limit(1);
+    const bal = balRes.data?.[0] || null;
     const available = Number(bal?.total_earned || 0) - Number(bal?.total_withdrawn || 0);
-    if (amount > available) throw new Error('Amount exceeds available balance');
+    if (amount > available) throw new Error(`Amount exceeds available balance (₦${available.toLocaleString('en-NG')})`);
 
-    const { data, error } = await supabase
+    const insertRes = await supabase
       .from('withdrawal_requests')
       .insert({
         agent_id: agentId,
@@ -1036,10 +1038,9 @@ export const withdrawalAPI = {
         status: 'pending',
         requested_at: new Date().toISOString(),
       })
-      .select()
-      .single();
-    if (error) throw error;
-    return { data };
+      .select();
+    if (insertRes.error) throw insertRes.error;
+    return { data: insertRes.data?.[0] };
   },
 
   getMyRequests: async (agentId) => {
@@ -1078,11 +1079,12 @@ export const withdrawalAPI = {
     if (updErr) throw updErr;
 
     // Add to total_withdrawn in agent_balances
-    const { data: bal } = await supabase
+    const balRes2 = await supabase
       .from('agent_balances')
       .select('total_withdrawn')
       .eq('agent_id', req.agent_id)
-      .maybeSingle();
+      .limit(1);
+    const bal = balRes2.data?.[0] || null;
     const newWithdrawn = Number(bal?.total_withdrawn || 0) + Number(req.amount);
     await supabase
       .from('agent_balances')
