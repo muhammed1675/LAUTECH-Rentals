@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { propertyAPI, inspectionAPI, storageAPI, balanceAPI, withdrawalAPI } from '../lib/api';
+import { propertyAPI, inspectionAPI, storageAPI } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -12,7 +12,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
-import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X, CreditCard, Copy, Pencil, Phone, TrendingUp, ArrowDownCircle, Wallet } from 'lucide-react';
+import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X, CreditCard, Copy, Pencil, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FALLBACK_BANKS = [
@@ -97,13 +97,6 @@ export function AgentDashboard() {
     property_type: 'hostel', images: [], contact_name: '', contact_phone: '',
   });
 
-  // Balance & withdrawal
-  const [balance, setBalance] = useState({ total_earned: 0, total_withdrawn: 0, available: 0 });
-  const [withdrawalRequests, setWithdrawalRequests] = useState([]);
-  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [submittingWithdraw, setSubmittingWithdraw] = useState(false);
-
   // Bank details
   const [banks, setBanks] = useState(FALLBACK_BANKS);
   const [banksLoading, setBanksLoading] = useState(true);
@@ -137,15 +130,6 @@ export function AgentDashboard() {
       ]);
       setProperties(propertiesRes.data);
       setInspections(inspectionsRes.data);
-      // Fetch balance
-      try {
-        const balRes = await balanceAPI.getMyBalance(user.id);
-        const earned = balRes.data?.total_earned || 0;
-        const withdrawn = balRes.data?.total_withdrawn || 0;
-        setBalance({ total_earned: earned, total_withdrawn: withdrawn, available: earned - withdrawn });
-        const wrRes = await withdrawalAPI.getMyRequests(user.id);
-        setWithdrawalRequests(wrRes.data || []);
-      } catch (e) { console.error('Balance fetch failed:', e); }
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -300,33 +284,6 @@ export function AgentDashboard() {
     }
   };
 
-  const handleWithdraw = async () => {
-    const amount = parseInt(withdrawAmount);
-    if (!amount || amount < 100) { toast.error('Minimum withdrawal is ₦100'); return; }
-    if (amount > balance.available) { toast.error('Amount exceeds available balance'); return; }
-    if (!bankDetails?.bank_name) { toast.error('Please set up your bank details first'); return; }
-    setSubmittingWithdraw(true);
-    try {
-      await withdrawalAPI.request({
-        agentId: user.id,
-        agentName: user.full_name,
-        agentEmail: user.email,
-        amount,
-        bankName: bankDetails.bank_name,
-        accountNumber: bankDetails.account_number,
-        accountName: bankDetails.account_name,
-      });
-      toast.success('Withdrawal request submitted — admin will process it shortly');
-      setShowWithdrawDialog(false);
-      setWithdrawAmount('');
-      fetchData();
-    } catch (err) {
-      toast.error(err.message || 'Failed to submit withdrawal');
-    } finally {
-      setSubmittingWithdraw(false);
-    }
-  };
-
   const copyToClipboard = (text, label) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied`);
@@ -384,50 +341,6 @@ export function AgentDashboard() {
         <Card className="p-4"><p className="text-2xl font-bold text-yellow-600">{properties.filter(p => p.status === 'pending').length}</p><p className="text-sm text-muted-foreground">Pending</p></Card>
         <Card className="p-4"><p className="text-2xl font-bold">{inspections.length}</p><p className="text-sm text-muted-foreground">Inspections</p></Card>
       </div>
-
-
-      {/* Balance Card */}
-      <Card className="mb-6 overflow-hidden border-green-200 bg-gradient-to-r from-green-600 to-green-700 text-white">
-        <div className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Wallet className="w-5 h-5 opacity-80" />
-              <p className="text-sm font-semibold opacity-90">Inspection Earnings</p>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => setShowWithdrawDialog(true)}
-              disabled={balance.available <= 0}
-              className="h-8 px-3 text-xs bg-white text-green-700 hover:bg-green-50 font-semibold gap-1.5"
-            >
-              <ArrowDownCircle className="w-3.5 h-3.5" /> Withdraw
-            </Button>
-          </div>
-          <p className="text-3xl font-bold mb-1">
-            {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(balance.available)}
-          </p>
-          <p className="text-xs opacity-70 mb-4">Available Balance</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/15 rounded-lg p-3">
-              <p className="text-xs opacity-70 mb-0.5">Total Earned</p>
-              <p className="text-sm font-bold">
-                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(balance.total_earned)}
-              </p>
-            </div>
-            <div className="bg-white/15 rounded-lg p-3">
-              <p className="text-xs opacity-70 mb-0.5">Total Withdrawn</p>
-              <p className="text-sm font-bold">
-                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(balance.total_withdrawn)}
-              </p>
-            </div>
-          </div>
-          {withdrawalRequests.filter(r => r.status === 'pending').length > 0 && (
-            <p className="text-xs opacity-70 mt-3">
-              ⏳ {withdrawalRequests.filter(r => r.status === 'pending').length} pending withdrawal request(s)
-            </p>
-          )}
-        </div>
-      </Card>
 
       {/* Tabs */}
       <Tabs defaultValue="properties">
@@ -700,56 +613,6 @@ export function AgentDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
-
-
-      {/* Withdraw Dialog */}
-      <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowDownCircle className="w-5 h-5 text-green-600" /> Request Withdrawal
-            </DialogTitle>
-            <DialogDescription>
-              Available: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(balance.available)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {bankDetails?.bank_name ? (
-              <div className="p-3 rounded-lg bg-muted/40 text-xs space-y-1">
-                <p className="font-semibold text-sm">Paying to:</p>
-                <p>{bankDetails.bank_name}</p>
-                <p className="font-mono">{bankDetails.account_number}</p>
-                <p className="font-bold">{bankDetails.account_name}</p>
-              </div>
-            ) : (
-              <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-xs text-yellow-700">
-                ⚠ No bank details set up. Go to the Bank Details tab first.
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>Amount (₦)</Label>
-              <Input
-                type="number"
-                placeholder="Enter amount"
-                value={withdrawAmount}
-                onChange={e => setWithdrawAmount(e.target.value)}
-                max={balance.available}
-              />
-              <p className="text-xs text-muted-foreground">Max: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(balance.available)}</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowWithdrawDialog(false)}>Cancel</Button>
-            <Button
-              onClick={handleWithdraw}
-              disabled={submittingWithdraw || !bankDetails?.bank_name}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {submittingWithdraw ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting...</> : 'Request Withdrawal'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Add/Edit Property Dialog */}
       <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
