@@ -12,7 +12,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
-import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X, CreditCard, Copy, Pencil, Phone, Wallet, TrendingUp, ArrowDownCircle } from 'lucide-react';
+import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X, CreditCard, Copy, Pencil, Phone, Wallet, TrendingUp, ArrowDownCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FALLBACK_BANKS = [
@@ -327,6 +327,17 @@ export function AgentDashboard() {
     }
   };
 
+  const handleMarkUnavailable = async (inspectionId) => {
+    if (!window.confirm('Mark this property as unavailable? This will notify admin and cancel the inspection.')) return;
+    try {
+      await inspectionAPI.update(inspectionId, { status: 'unavailable' });
+      toast.success('Marked as unavailable. Admin has been notified.');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update inspection status');
+    }
+  };
+
   const copyToClipboard = (text, label) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied`);
@@ -338,7 +349,8 @@ export function AgentDashboard() {
     approved: 'bg-green-100 text-green-800',
     rejected: 'bg-red-100 text-red-800',
     assigned: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800'
+    completed: 'bg-green-100 text-green-800',
+    unavailable: 'bg-orange-100 text-orange-700'
   }[status] || 'bg-gray-100 text-gray-800');
 
   if (!isAuthenticated || (!isAgent && !isAdmin)) return null;
@@ -529,6 +541,15 @@ export function AgentDashboard() {
                         <Button size="sm" onClick={() => handleMarkCompleted(inspection.id)} className="gap-1.5 h-7 text-xs">
                           <CheckCircle2 className="w-3.5 h-3.5" /> Done
                         </Button>
+                      )}
+                      {inspection.status !== 'completed' && inspection.status !== 'unavailable' && inspection.payment_status === 'completed' && (
+                        <Button size="sm" variant="outline" onClick={() => handleMarkUnavailable(inspection.id)}
+                          className="gap-1.5 h-7 text-xs text-orange-600 border-orange-300 hover:bg-orange-50">
+                          <AlertTriangle className="w-3 h-3" /> Unavailable
+                        </Button>
+                      )}
+                      {inspection.status === 'unavailable' && (
+                        <Badge className="bg-orange-100 text-orange-700 text-xs">Property Unavailable</Badge>
                       )}
                     </div>
                   </div>
