@@ -1003,7 +1003,6 @@ export function AdminDashboard() {
             </Table>
           </Card>
         </TabsContent>
-        </TabsContent>
       </Tabs>
 
       {/* ── Agent Detail Dialog ── */}
