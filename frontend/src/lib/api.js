@@ -21,6 +21,9 @@ export const propertyAPI = {
     } else {
       query = query.eq('status', 'approved');
     }
+
+    // Never show unavailable properties to browsers
+    query = query.or('availability.is.null,availability.eq.available');
     
     if (params.property_type) {
       query = query.eq('property_type', params.property_type);
