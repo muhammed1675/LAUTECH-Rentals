@@ -12,7 +12,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
-import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X, CreditCard, Copy, Pencil, Phone, Wallet, TrendingUp, ArrowDownCircle, AlertTriangle } from 'lucide-react';
+import { Building2, Plus, Calendar, Edit, CheckCircle2, XCircle, Home, Building, Upload, Image, Loader2, Expand, ChevronLeft, ChevronRight, X, CreditCard, Copy, Pencil, Phone, Wallet, TrendingUp, ArrowDownCircle, EyeOff, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FALLBACK_BANKS = [
@@ -327,14 +327,16 @@ export function AgentDashboard() {
     }
   };
 
-  const handleMarkUnavailable = async (inspectionId) => {
-    if (!window.confirm('Mark this property as unavailable? This will notify admin and cancel the inspection.')) return;
+  const handleToggleAvailability = async (property) => {
+    const isUnavailable = property.availability === 'unavailable';
+    const newAvailability = isUnavailable ? 'available' : 'unavailable';
+    const label = isUnavailable ? 'marked as available again' : 'marked as unavailable';
     try {
-      await inspectionAPI.update(inspectionId, { status: 'unavailable' });
-      toast.success('Marked as unavailable. Admin has been notified.');
+      await propertyAPI.update(property.id, { availability: newAvailability });
+      toast.success(`Property ${label}.`);
       fetchData();
-    } catch (error) {
-      toast.error('Failed to update inspection status');
+    } catch (err) {
+      toast.error('Failed to update property availability');
     }
   };
 
@@ -349,8 +351,7 @@ export function AgentDashboard() {
     approved: 'bg-green-100 text-green-800',
     rejected: 'bg-red-100 text-red-800',
     assigned: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800',
-    unavailable: 'bg-orange-100 text-orange-700'
+    completed: 'bg-green-100 text-green-800'
   }[status] || 'bg-gray-100 text-gray-800');
 
   if (!isAuthenticated || (!isAgent && !isAdmin)) return null;
@@ -481,11 +482,22 @@ export function AgentDashboard() {
                       <p className="text-xs text-muted-foreground line-clamp-1">{property.location}</p>
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-primary font-bold text-sm truncate">{formatPrice(property.price)}<span className="text-xs font-normal text-muted-foreground">/yr</span></p>
-                        <Button variant="outline" size="sm"
-                          onClick={() => { if (user?.suspended) { toast.error('Your account is suspended.'); return; } handleOpenDialog(property); }}
-                          disabled={user?.suspended} className="h-7 px-2.5 text-xs gap-1 shrink-0">
-                          <Edit className="w-3 h-3" /> Edit
-                        </Button>
+                        <div className="flex gap-1.5 shrink-0">
+                          <Button variant="outline" size="sm"
+                            onClick={() => { if (user?.suspended) { toast.error('Your account is suspended.'); return; } handleOpenDialog(property); }}
+                            disabled={user?.suspended} className="h-7 px-2.5 text-xs gap-1">
+                            <Edit className="w-3 h-3" /> Edit
+                          </Button>
+                          <Button variant="outline" size="sm"
+                            onClick={() => handleToggleAvailability(property)}
+                            disabled={user?.suspended}
+                            className={`h-7 px-2.5 text-xs gap-1 ${property.availability === 'unavailable' ? 'text-green-600 border-green-300 hover:bg-green-50' : 'text-orange-600 border-orange-300 hover:bg-orange-50'}`}>
+                            {property.availability === 'unavailable'
+                              ? <><Eye className="w-3 h-3" /> Available</>
+                              : <><EyeOff className="w-3 h-3" /> Unavailable</>
+                            }
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -541,15 +553,6 @@ export function AgentDashboard() {
                         <Button size="sm" onClick={() => handleMarkCompleted(inspection.id)} className="gap-1.5 h-7 text-xs">
                           <CheckCircle2 className="w-3.5 h-3.5" /> Done
                         </Button>
-                      )}
-                      {inspection.status !== 'completed' && inspection.status !== 'unavailable' && inspection.payment_status === 'completed' && (
-                        <Button size="sm" variant="outline" onClick={() => handleMarkUnavailable(inspection.id)}
-                          className="gap-1.5 h-7 text-xs text-orange-600 border-orange-300 hover:bg-orange-50">
-                          <AlertTriangle className="w-3 h-3" /> Unavailable
-                        </Button>
-                      )}
-                      {inspection.status === 'unavailable' && (
-                        <Badge className="bg-orange-100 text-orange-700 text-xs">Property Unavailable</Badge>
                       )}
                     </div>
                   </div>
