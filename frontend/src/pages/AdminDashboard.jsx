@@ -264,6 +264,7 @@ export function AdminDashboard() {
     rejected: 'bg-red-100 text-red-800',
     completed: 'bg-green-100 text-green-800',
     assigned: 'bg-blue-100 text-blue-800',
+    unavailable: 'bg-orange-100 text-orange-700',
   }[status] || 'bg-gray-100 text-gray-800');
 
   const filteredUsers = users.filter(u =>
@@ -744,7 +745,12 @@ export function AdminDashboard() {
                       <div>
                         <div className="flex items-start justify-between gap-1">
                           <h4 className="font-semibold text-sm line-clamp-1 flex-1 min-w-0">{p.title}</h4>
-                          <Badge className={`${getStatusBadge(p.status)} text-xs shrink-0 capitalize`}>{p.status}</Badge>
+                          <div className="flex flex-col gap-1 items-end">
+                            <Badge className={`${getStatusBadge(p.status)} text-xs shrink-0 capitalize`}>{p.status}</Badge>
+                            {p.availability === 'unavailable' && (
+                              <Badge className="bg-orange-100 text-orange-700 text-xs">Unavailable</Badge>
+                            )}
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-1">{p.location}</p>
                         <p className="text-xs text-muted-foreground capitalize">{p.property_type} · {formatPrice(p.price)}/yr</p>
@@ -768,7 +774,14 @@ export function AdminDashboard() {
                     <TableCell className="capitalize text-sm">{p.property_type}</TableCell>
                     <TableCell className="text-sm whitespace-nowrap">{formatPrice(p.price)}</TableCell>
                     <TableCell className="text-sm">{p.uploaded_by_agent_name}</TableCell>
-                    <TableCell><Badge className={`${getStatusBadge(p.status)} capitalize`}>{p.status}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge className={`${getStatusBadge(p.status)} capitalize w-fit`}>{p.status}</Badge>
+                        {p.availability === 'unavailable' && (
+                          <Badge className="bg-orange-100 text-orange-700 w-fit text-xs">Unavailable</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell><div className="flex gap-1.5">{p.status === 'pending' && (<><Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setPreviewProperty(p)}><Eye className="w-3.5 h-3.5" /></Button><Button size="sm" className="h-7 px-2" onClick={() => handleApproveProperty(p.id, 'approved')}><CheckCircle2 className="w-3.5 h-3.5" /></Button><Button size="sm" variant="outline" className="h-7 px-2" onClick={() => handleApproveProperty(p.id, 'rejected')}><XCircle className="w-3.5 h-3.5" /></Button></>)}<Button variant="destructive" size="sm" className="h-7 px-2" onClick={() => confirmDeleteProperty(p)}><Trash2 className="w-3.5 h-3.5" /></Button></div></TableCell>
                   </TableRow>
                 ))}</TableBody>
