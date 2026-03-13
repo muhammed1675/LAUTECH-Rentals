@@ -17,21 +17,10 @@ export function Home() {
 
   useEffect(() => {
     const seen = localStorage.getItem('rentora_onboarding_seen');
-    if (seen) return; // already seen, never show again
-
-    // Wait for consent to be answered first, then show onboarding
-    const checkConsent = () => {
-      const consent = localStorage.getItem('rentora_consent');
-      if (consent) {
-        // Consent answered — show onboarding after a short delay
-        setTimeout(() => setShowOnboarding(true), 500);
-      } else {
-        // Consent not yet answered — keep polling
-        setTimeout(checkConsent, 300);
-      }
-    };
-    const t = setTimeout(checkConsent, 800);
-    return () => clearTimeout(t);
+    if (!seen) {
+      const t = setTimeout(() => setShowOnboarding(true), 800);
+      return () => clearTimeout(t);
+    }
   }, []);
 
   const dismissOnboarding = () => {
@@ -212,6 +201,53 @@ export function Home() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── Become an Agent CTA ──────────────────────── */}
+      <section className="py-16 md:py-24 bg-background">
+        <div className="container mx-auto px-4">
+          <Card className="relative overflow-hidden bg-slate-900 text-white p-8 md:p-12 border-0 shadow-xl">
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-medium mb-4">
+                  <Users className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-white/80">Join Our Agent Network</span>
+                </div>
+                <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
+                  Want to Become a Rentora Agent?
+                </h2>
+                <p className="mt-3 text-white/70 text-sm md:text-base leading-relaxed">
+                  Earn <span className="text-primary font-semibold">₦2,500</span> per completed inspection. Work flexible hours, help students find housing, and grow your income — all verified through our platform.
+                </p>
+                <ul className="mt-4 space-y-1.5">
+                  {[
+                    '₦2,500 paid per inspection you complete',
+                    'Flexible — work at your own pace',
+                    'ID-verified badge builds trust with renters',
+                    'Withdraw earnings directly to your bank account',
+                  ].map(item => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-white/75">
+                      <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="shrink-0">
+                <Link to="/become-agent">
+                  <Button size="lg" className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold shadow-lg active:scale-95 transition-transform w-full md:w-auto">
+                    Apply to Become an Agent
+                    <ArrowRight className="w-5 h-5" />
+                  </Button>
+                </Link>
+                <p className="text-xs text-white/40 mt-3 text-center md:text-left">Free to join · No monthly fees</p>
+              </div>
+            </div>
+            {/* Decorative */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -translate-y-1/3 translate-x-1/3" />
+            <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-white/5 rounded-full translate-y-1/2" />
+          </Card>
         </div>
       </section>
 
