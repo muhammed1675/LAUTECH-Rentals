@@ -214,7 +214,7 @@ export function Home() {
                   Want to Become a Rentora Agent?
                 </h2>
                 <p className="mt-4 text-white/80 text-base leading-relaxed">
-                  Earn ₦2,100 per completed inspection. Work flexible hours, help students find housing, and grow your income — all verified through our platform.
+                  Earn <strong>₦2,100</strong> per completed inspection. Work flexible hours, help students find housing, and grow your income — all verified through our platform.
                 </p>
                 <ul className="mt-4 space-y-1.5">
                   {[
