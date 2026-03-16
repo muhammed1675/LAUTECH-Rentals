@@ -12,8 +12,6 @@ import {
 
 import { AppBanner } from '../components/AppBanner';
 
-import { AppBanner } from '../components/AppBanner';
-
 export function Home() {
   const { isAuthenticated } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
