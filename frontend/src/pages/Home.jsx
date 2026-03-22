@@ -246,7 +246,7 @@ export function Home() {
 
       {/* ── Onboarding Modal ─────────────────────────── */}
       <Dialog open={showOnboarding} onOpenChange={() => {}}>
-        <DialogContent className="w-[calc(100vw-32px)] max-w-sm mx-auto rounded-2xl p-0 overflow-hidden gap-0 [&>button]:hidden">
+        <DialogContent className="w-[calc(100vw-32px)] max-w-sm mx-auto rounded-2xl p-0 overflow-hidden gap-0 [&>button]:hidden z-[99999]">
           {/* Progress dots */}
           <div className="flex gap-1.5 justify-center pt-5 pb-1">
             {onboardingSteps.map((_, i) => (
