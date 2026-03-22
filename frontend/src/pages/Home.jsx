@@ -20,6 +20,7 @@ export function Home() {
   useEffect(() => {
     const seen = localStorage.getItem('rentora_onboarding_seen');
     if (!seen) {
+      // Show onboarding FIRST — consent banner is blocked until onboarding is done
       const t = setTimeout(() => setShowOnboarding(true), 800);
       return () => clearTimeout(t);
     }
@@ -27,6 +28,8 @@ export function Home() {
 
   const dismissOnboarding = () => {
     localStorage.setItem('rentora_onboarding_seen', 'true');
+    // Signal consent banner it can now appear
+    localStorage.setItem('rentora_onboarding_done', 'true');
     setShowOnboarding(false);
     setOnboardingStep(0);
   };
