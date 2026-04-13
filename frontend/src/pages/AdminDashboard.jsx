@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
@@ -48,6 +49,8 @@ export function AdminDashboard() {
   const [agentBalances, setAgentBalances] = useState([]);
   const [rejectingWithdrawal, setRejectingWithdrawal] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -226,6 +229,31 @@ export function AdminDashboard() {
     } catch { toast.error('Failed to delete message'); }
   };
 
+  const handleReply = async (msg) => {
+    if (!replyText.trim()) { toast.error('Please write a reply first'); return; }
+    setSendingReply(true);
+    try {
+      const res = await fetch('/api/send-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: msg.email,
+          toName: msg.name,
+          subject: msg.subject,
+          message: replyText.trim(),
+          originalMessage: msg.message,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to send');
+      toast.success(`Reply sent to ${msg.name}!`);
+      setReplyText('');
+    } catch (err) {
+      toast.error('Failed to send reply. Check your email config.');
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
   const copyToClipboard = (text, label) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied`);
@@ -264,7 +292,6 @@ export function AdminDashboard() {
     rejected: 'bg-red-100 text-red-800',
     completed: 'bg-green-100 text-green-800',
     assigned: 'bg-blue-100 text-blue-800',
-    unavailable: 'bg-orange-100 text-orange-700',
   }[status] || 'bg-gray-100 text-gray-800');
 
   const filteredUsers = users.filter(u =>
@@ -745,12 +772,7 @@ export function AdminDashboard() {
                       <div>
                         <div className="flex items-start justify-between gap-1">
                           <h4 className="font-semibold text-sm line-clamp-1 flex-1 min-w-0">{p.title}</h4>
-                          <div className="flex flex-col gap-1 items-end">
-                            <Badge className={`${getStatusBadge(p.status)} text-xs shrink-0 capitalize`}>{p.status}</Badge>
-                            {p.availability === 'unavailable' && (
-                              <Badge className="bg-orange-100 text-orange-700 text-xs">Unavailable</Badge>
-                            )}
-                          </div>
+                          <Badge className={`${getStatusBadge(p.status)} text-xs shrink-0 capitalize`}>{p.status}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-1">{p.location}</p>
                         <p className="text-xs text-muted-foreground capitalize">{p.property_type} · {formatPrice(p.price)}/yr</p>
@@ -774,14 +796,7 @@ export function AdminDashboard() {
                     <TableCell className="capitalize text-sm">{p.property_type}</TableCell>
                     <TableCell className="text-sm whitespace-nowrap">{formatPrice(p.price)}</TableCell>
                     <TableCell className="text-sm">{p.uploaded_by_agent_name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <Badge className={`${getStatusBadge(p.status)} capitalize w-fit`}>{p.status}</Badge>
-                        {p.availability === 'unavailable' && (
-                          <Badge className="bg-orange-100 text-orange-700 w-fit text-xs">Unavailable</Badge>
-                        )}
-                      </div>
-                    </TableCell>
+                    <TableCell><Badge className={`${getStatusBadge(p.status)} capitalize`}>{p.status}</Badge></TableCell>
                     <TableCell><div className="flex gap-1.5">{p.status === 'pending' && (<><Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setPreviewProperty(p)}><Eye className="w-3.5 h-3.5" /></Button><Button size="sm" className="h-7 px-2" onClick={() => handleApproveProperty(p.id, 'approved')}><CheckCircle2 className="w-3.5 h-3.5" /></Button><Button size="sm" variant="outline" className="h-7 px-2" onClick={() => handleApproveProperty(p.id, 'rejected')}><XCircle className="w-3.5 h-3.5" /></Button></>)}<Button variant="destructive" size="sm" className="h-7 px-2" onClick={() => confirmDeleteProperty(p)}><Trash2 className="w-3.5 h-3.5" /></Button></div></TableCell>
                   </TableRow>
                 ))}</TableBody>
@@ -880,12 +895,26 @@ export function AdminDashboard() {
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 mb-5">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0"><User className="w-5 h-5 text-primary" /></div>
                       <div className="min-w-0 flex-1"><p className="font-semibold text-sm">{selectedMessage.name}</p><p className="text-xs text-foreground/55 truncate">{selectedMessage.email}</p></div>
-                      <a href={`mailto:${selectedMessage.email}?subject=Re: ${encodeURIComponent(selectedMessage.subject)}`} target="_blank" rel="noreferrer">
-                        <Button size="sm" className="h-8 px-3 gap-1.5 text-xs shrink-0"><Mail className="w-3.5 h-3.5" /> Reply</Button>
-                      </a>
                     </div>
                     <div className="bg-white border border-border/50 rounded-lg p-4 min-h-[120px]"><p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{selectedMessage.message}</p></div>
-                    <p className="text-xs text-foreground/40 mt-3 text-center">Clicking Reply opens your email client with a pre-filled reply</p>
+                    {/* Inline reply composer */}
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reply to {selectedMessage.name}</p>
+                      <Textarea
+                        value={replyText}
+                        onChange={e => setReplyText(e.target.value)}
+                        placeholder={`Write your reply to ${selectedMessage.name}...`}
+                        rows={4}
+                        className="resize-none text-sm"
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">Sends to: <span className="font-medium">{selectedMessage.email}</span></p>
+                        <Button size="sm" className="gap-1.5" onClick={() => handleReply(selectedMessage)} disabled={sendingReply || !replyText.trim()}>
+                          <Mail className="w-3.5 h-3.5" />
+                          {sendingReply ? 'Sending...' : 'Send Reply'}
+                        </Button>
+                      </div>
+                    </div>
                   </Card>
                 ) : (
                   <Card className="p-12 text-center border-border/60"><MailOpen className="w-12 h-12 text-foreground/20 mx-auto mb-3" /><p className="text-sm text-foreground/50">Select a message to read it</p></Card>
@@ -1416,31 +1445,6 @@ export function AdminDashboard() {
                   {previewProperty.bedrooms && <Badge variant="outline">{previewProperty.bedrooms} bed</Badge>}
                   {previewProperty.bathrooms && <Badge variant="outline">{previewProperty.bathrooms} bath</Badge>}
                 </div>
-                {(previewProperty.caution_fee || previewProperty.agent_fee) && (
-                  <div className="mt-3 p-3 rounded-lg bg-muted/40 space-y-1.5">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Fee Breakdown</p>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Annual Rent</span>
-                      <span className="font-medium">{formatPrice(previewProperty.price)}</span>
-                    </div>
-                    {previewProperty.caution_fee && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Caution Fee</span>
-                        <span className="font-medium">{formatPrice(previewProperty.caution_fee)}</span>
-                      </div>
-                    )}
-                    {previewProperty.agent_fee && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Agent Fee</span>
-                        <span className="font-medium">{formatPrice(previewProperty.agent_fee)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm font-bold pt-1.5 border-t border-border/50">
-                      <span>Total Move-in Cost</span>
-                      <span className="text-primary">{formatPrice(Number(previewProperty.price||0)+Number(previewProperty.caution_fee||0)+Number(previewProperty.agent_fee||0))}</span>
-                    </div>
-                  </div>
-                )}
               </div>
               {/* Description */}
               {previewProperty.description && (
