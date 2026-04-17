@@ -136,49 +136,6 @@ export function Home() {
         </div>
       </section>
 
-      {/* ── Updated: Ogbomosho Marketplace Promo Banner ──── */}
-      <section className="py-12 bg-background">
-        <div className="container mx-auto px-4">
-          <div 
-            className="relative overflow-hidden rounded-[2.5rem] p-8 md:p-16 shadow-2xl group border border-white/10"
-            style={{
-              backgroundImage: `linear-gradient(135deg, rgba(26, 32, 25, 0.85) 0%, rgba(45, 90, 39, 0.7) 50%, rgba(26, 32, 25, 0.6) 100%), url('https://images.unsplash.com/photo-1585540083814-ea6ee8af9e4f?w=1600&h=900&fit=crop')`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center'
-            }}
-          >
-            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-              <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl transition-transform group-hover:scale-110 duration-500">
-                  <ShoppingBag className="h-10 w-10 text-white" />
-                </div>
-                <div>
-                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-yellow-400 text-black text-[11px] font-black uppercase tracking-[0.1em] mb-4 shadow-lg animate-bounce">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Coming Soon
-                  </div>
-                  <h2 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight">
-                    The Ogbomosho Student <br className="hidden md:block" /> Marketplace
-                  </h2>
-                  <p className="mt-4 text-white/90 text-lg md:text-xl max-w-2xl font-medium leading-relaxed">
-                    Buy and sell anything within the LAUTECH community. From used textbooks to electronics—safe, local, and student-only.
-                  </p>
-                </div>
-              </div>
-
-              <div className="shrink-0 w-full md:w-auto">
-                <Link to="/listings">
-                  <Button size="lg" className="w-full md:w-auto bg-white text-emerald-900 hover:bg-slate-50 font-black px-12 h-16 rounded-2xl shadow-2xl hover:scale-105 transition-all group border-0 text-lg">
-                    Explore Marketplace
-                    <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-2 transition-transform" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ── Features ─────────────────────────────────── */}
       <section className="py-16 md:py-24 bg-background" aria-label="Why choose Rentora for student accommodation Ogbomosho">
         <div className="container mx-auto px-4">
@@ -316,6 +273,49 @@ export function Home() {
               </div>
             </div>
           </Card>
+        </div>
+      </section>
+
+            {/* ── Updated: Ogbomosho Marketplace Promo Banner ──── */}
+      <section className="py-12 bg-background">
+        <div className="container mx-auto px-4">
+          <div 
+            className="relative overflow-hidden rounded-[2.5rem] p-8 md:p-16 shadow-2xl group border border-white/10"
+            style={{
+              backgroundImage: `linear-gradient(135deg, rgba(26, 32, 25, 0.85) 0%, rgba(45, 90, 39, 0.7) 50%, rgba(26, 32, 25, 0.6) 100%), url('https://images.unsplash.com/photo-1585540083814-ea6ee8af9e4f?w=1600&h=900&fit=crop')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}
+          >
+            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl transition-transform group-hover:scale-110 duration-500">
+                  <ShoppingBag className="h-10 w-10 text-white" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-yellow-400 text-black text-[11px] font-black uppercase tracking-[0.1em] mb-4 shadow-lg animate-bounce">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Coming Soon
+                  </div>
+                  <h2 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight">
+                    The Ogbomosho Student <br className="hidden md:block" /> Marketplace
+                  </h2>
+                  <p className="mt-4 text-white/90 text-lg md:text-xl max-w-2xl font-medium leading-relaxed">
+                    Buy and sell anything within the LAUTECH community. From used textbooks to electronics—safe, local, and student-only.
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 w-full md:w-auto">
+                <Link to="/listings">
+                  <Button size="lg" className="w-full md:w-auto bg-white text-emerald-900 hover:bg-slate-50 font-black px-12 h-16 rounded-2xl shadow-2xl hover:scale-105 transition-all group border-0 text-lg">
+                    Explore Marketplace
+                    <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-2 transition-transform" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
