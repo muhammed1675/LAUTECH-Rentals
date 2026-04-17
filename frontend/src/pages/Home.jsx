@@ -20,7 +20,6 @@ export function Home() {
   useEffect(() => {
     const seen = localStorage.getItem('rentora_onboarding_seen');
     if (!seen) {
-      // Show onboarding FIRST — consent banner is blocked until onboarding is done
       const t = setTimeout(() => setShowOnboarding(true), 800);
       return () => clearTimeout(t);
     }
@@ -28,7 +27,6 @@ export function Home() {
 
   const dismissOnboarding = () => {
     localStorage.setItem('rentora_onboarding_seen', 'true');
-    // Signal consent banner it can now appear
     localStorage.setItem('rentora_onboarding_done', 'true');
     setShowOnboarding(false);
     setOnboardingStep(0);
@@ -80,38 +78,30 @@ export function Home() {
 
       {/* ── Hero ─────────────────────────────────────── */}
       <section className="relative h-[580px] md:h-[640px] flex items-center overflow-hidden" aria-label="Find student hostels and accommodation near LAUTECH Ogbomosho">
-        {/* Background image */}
         <img
           src="https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg"
           alt="Student accommodation near LAUTECH Ogbomosho"
           className="absolute inset-0 w-full h-full object-cover object-center"
         />
-        {/* Solid dark overlay */}
         <div className="absolute inset-0 bg-slate-900/70" />
-
-        {/* Bottom hard edge */}
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-900/70" />
 
         <div className="relative z-10 container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center space-y-6">
-            {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 text-sm font-medium backdrop-blur-sm">
               <Building2 className="w-4 h-4 text-primary" />
               <span className="text-white/90">Student Housing Made Easy</span>
             </div>
 
-            {/* H1 — primary keywords */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-lg">
               Verified Hostels &amp; Rooms
               <span className="text-primary block mt-2">Near LAUTECH, Ogbomosho</span>
             </h1>
 
-            {/* Subheadline — secondary keywords */}
             <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto">
               Ogbomosho's #1 student housing platform. Find cheap hostels, self-contains, bedsitters and mini flats near LAUTECH — unlock agent contacts &amp; book inspections online.
             </p>
 
-            {/* CTAs */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
               <Link to="/browse">
                 <Button size="lg" className="gap-2 px-8 shadow-lg active:scale-95 transition-transform" data-testid="browse-btn">
@@ -146,42 +136,43 @@ export function Home() {
         </div>
       </section>
 
-      {/* ── NEW: Ogbomosho Marketplace Promo Banner ──── */}
-      <section className="py-8 bg-background">
+      {/* ── Updated: Ogbomosho Marketplace Promo Banner ──── */}
+      <section className="py-12 bg-background">
         <div className="container mx-auto px-4">
-          <div className="relative overflow-hidden rounded-3xl bg-slate-900 p-1 border border-slate-800 shadow-2xl">
-            <div className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-indigo-600 via-purple-600 to-primary px-6 py-8 md:px-12 md:py-10">
-              {/* Decorative elements */}
-              <div className="absolute top-0 right-0 -mt-8 -mr-8 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-              <div className="absolute bottom-0 left-0 -mb-8 -ml-8 h-48 w-48 rounded-full bg-black/20 blur-2xl" />
-              
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 shadow-xl">
-                    <ShoppingBag className="h-8 w-8 text-white" />
-                  </div>
-                  <div>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-400/20 border border-yellow-400/30 text-yellow-300 text-xs font-bold uppercase tracking-wider mb-3">
-                      <Sparkles className="w-3 h-3" />
-                      Coming Soon
-                    </div>
-                    <h2 className="text-2xl md:text-4xl font-black text-white leading-tight">
-                      The Ogbomosho Student <br className="hidden md:block" /> Marketplace
-                    </h2>
-                    <p className="mt-3 text-white/80 text-lg max-w-xl">
-                      Buy and sell anything within the LAUTECH community. From used textbooks to electronics—safe, local, and student-only.
-                    </p>
-                  </div>
+          <div 
+            className="relative overflow-hidden rounded-[2.5rem] p-8 md:p-16 shadow-2xl group border border-white/10"
+            style={{
+              backgroundImage: `linear-gradient(135deg, rgba(26, 32, 25, 0.85) 0%, rgba(45, 90, 39, 0.7) 50%, rgba(26, 32, 25, 0.6) 100%), url('https://images.unsplash.com/photo-1585540083814-ea6ee8af9e4f?w=1600&h=900&fit=crop')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}
+          >
+            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl transition-transform group-hover:scale-110 duration-500">
+                  <ShoppingBag className="h-10 w-10 text-white" />
                 </div>
+                <div>
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-yellow-400 text-black text-[11px] font-black uppercase tracking-[0.1em] mb-4 shadow-lg animate-bounce">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Coming Soon
+                  </div>
+                  <h2 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight">
+                    The Ogbomosho Student <br className="hidden md:block" /> Marketplace
+                  </h2>
+                  <p className="mt-4 text-white/90 text-lg md:text-xl max-w-2xl font-medium leading-relaxed">
+                    Buy and sell anything within the LAUTECH community. From used textbooks to electronics—safe, local, and student-only.
+                  </p>
+                </div>
+              </div>
 
-                <div className="shrink-0">
-                  <Link to="/listings">
-                    <Button size="lg" className="bg-white text-indigo-600 hover:bg-slate-100 font-bold px-10 h-14 rounded-2xl shadow-xl hover:scale-105 transition-all group">
-                      Explore Marketplace
-                      <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </Button>
-                  </Link>
-                </div>
+              <div className="shrink-0 w-full md:w-auto">
+                <Link to="/listings">
+                  <Button size="lg" className="w-full md:w-auto bg-white text-emerald-900 hover:bg-slate-50 font-black px-12 h-16 rounded-2xl shadow-2xl hover:scale-105 transition-all group border-0 text-lg">
+                    Explore Marketplace
+                    <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-2 transition-transform" />
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>
@@ -251,52 +242,15 @@ export function Home() {
         </div>
       </section>
 
-      {/* ── CTA ──────────────────────────────────────── */}
-      <section className="py-16 md:py-24 bg-background">
-        <div className="container mx-auto px-4">
-          <Card className="relative overflow-hidden bg-primary text-white p-8 md:p-12 border-0 shadow-xl">
-            <div className="relative z-10 max-w-2xl">
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white">
-                Ready to Find Student Housing in Ogbomosho?
-              </h2>
-              <p className="mt-4 text-white/80 text-base leading-relaxed">
-                Join LAUTECH students who found their hostel, self-contain or apartment on Rentora — verified listings, trusted agents, easy inspections.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 mt-8">
-                <Link to="/browse">
-                  <Button size="lg" className="gap-2 bg-white text-primary hover:bg-white/90 font-semibold shadow active:scale-95 transition-transform" data-testid="cta-browse">
-                    <Search className="w-5 h-5" />
-                    Start Browsing
-                  </Button>
-                </Link>
-                {!isAuthenticated && (
-                  <Link to="/register">
-                    <Button size="lg" variant="outline" className="gap-2 bg-transparent border-white/40 text-white hover:bg-white/10 active:scale-95 transition-transform" data-testid="cta-register">
-                      Create Account
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            </div>
-            {/* Decorative circles */}
-            <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full -translate-y-1/3 translate-x-1/3" />
-            <div className="absolute bottom-0 right-1/4 w-40 h-40 bg-white/5 rounded-full translate-y-1/2" />
-            <div className="absolute top-1/2 right-8 w-20 h-20 bg-white/5 rounded-full -translate-y-1/2" />
-          </Card>
-        </div>
-      </section>
-
       {/* ── Onboarding Modal ─────────────────────────── */}
       <Dialog open={showOnboarding} onOpenChange={() => {}}>
         <DialogContent className="w-[calc(100vw-32px)] max-w-sm mx-auto rounded-2xl p-0 overflow-hidden gap-0 [&>button]:hidden z-[99999]">
-          {/* Progress dots */}
           <div className="flex gap-1.5 justify-center pt-5 pb-1">
             {onboardingSteps.map((_, i) => (
               <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === onboardingStep ? 'w-6 bg-primary' : 'w-1.5 bg-muted-foreground/20'}`} />
             ))}
           </div>
 
-          {/* Step content */}
           <div className="px-6 py-5 text-center min-h-[200px] flex flex-col items-center justify-center">
             {(() => {
               const step = onboardingSteps[onboardingStep];
@@ -313,7 +267,6 @@ export function Home() {
             })()}
           </div>
 
-          {/* Actions */}
           <div className="flex gap-2 px-6 pb-6">
             <button
               onClick={dismissOnboarding}
@@ -344,62 +297,28 @@ export function Home() {
                   Want to Become a Rentora Agent?
                 </h2>
                 <p className="mt-4 text-white/80 text-base leading-relaxed">
-                  Earn <strong>₦2,100</strong> per completed inspection. Work flexible hours, help students find housing, and grow your income — all verified through our platform.
+                  Earn <strong>₦2,100</strong> per completed inspection. Work flexible hours and grow your income.
                 </p>
                 <ul className="mt-4 space-y-1.5">
-                  {['₦2,100 paid per inspection you complete','Flexible — work at your own pace','ID-verified badge builds trust with renters','Withdraw earnings directly to your bank account'].map(item => (
+                  {['₦2,100 paid per inspection', 'Flexible hours', 'ID-verified badge', 'Direct bank withdrawals'].map(item => (
                     <li key={item} className="flex items-center gap-2 text-sm text-white/80">
                       <CheckCircle2 className="w-4 h-4 text-white shrink-0" />{item}
                     </li>
                   ))}
                 </ul>
               </div>
-              <div className="shrink-0 flex flex-col gap-3">
+              <div className="shrink-0">
                 <Link to="/become-agent">
-                  <Button size="lg" className="gap-2 bg-white text-primary hover:bg-white/90 font-semibold shadow active:scale-95 transition-transform">
-                    Apply to Become an Agent <ArrowRight className="w-5 h-5" />
+                  <Button size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold shadow active:scale-95 transition-transform">
+                    Apply Now <ArrowRight className="w-5 h-5" />
                   </Button>
                 </Link>
-                <p className="text-xs text-white/50 text-center">Free to join · No monthly fees</p>
               </div>
             </div>
-            <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full -translate-y-1/3 translate-x-1/3" />
-            <div className="absolute bottom-0 right-1/4 w-40 h-40 bg-white/5 rounded-full translate-y-1/2" />
-            <div className="absolute top-1/2 right-8 w-20 h-20 bg-white/5 rounded-full -translate-y-1/2" />
           </Card>
         </div>
       </section>
 
-      {/* ── Download App Section ────────────────────── */}
-      <section className="py-12 bg-slate-50 border-y border-border/40">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 max-w-3xl mx-auto">
-            <div className="flex items-center gap-4">
-              <img src="/launchericon-192x192.png" alt="Rentora App" className="w-16 h-16 rounded-2xl shadow-md" />
-              <div>
-                <h3 className="font-bold text-lg">Download the Rentora App</h3>
-                <p className="text-sm text-foreground/60 mt-0.5">Fast, easy access to student housing near LAUTECH</p>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-              <a href="/rentora.apk" download="Rentora.apk"
-                className="flex items-center gap-2.5 bg-black text-white px-4 py-2.5 rounded-xl hover:bg-black/80 transition-colors">
-                <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white shrink-0"><path d="M3.18 23.76c.3.17.64.24.99.2l12.6-11.96L13.5 8.74 3.18 23.76zm16.7-10.8L16.7 11.1l-3.5 3.33 3.5 3.32 3.2-1.88c.9-.53.9-1.4-.02-1.91zM2.3.32C2.1.55 2 .9 2 1.34v21.3c0 .44.1.78.31 1.01l.06.06 11.93-11.93v-.28L2.36.26 2.3.32zm10.8 11.07L2.3.32l-.01-.06L13.5 8.74l-.4 2.65z"/></svg>
-                <div><p className="text-[10px] text-white/70 leading-none">Download APK for</p><p className="text-sm font-semibold leading-tight">Android</p></div>
-              </a>
-              <div className="cursor-not-allowed opacity-50">
-                <img
-                  src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
-                  alt="Download on the App Store"
-                  className="h-10"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* App install banner — shows on mobile */}
       <AppBanner />
     </div>
   );
