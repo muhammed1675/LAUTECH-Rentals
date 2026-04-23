@@ -307,7 +307,7 @@ export function Home() {
               </div>
 
               <div className="shrink-0 w-full md:w-auto">
-                <Link to="/listings">
+                <Link to="https://ogbomoshomarket.vercel.app/">
                   <Button size="lg" className="w-full md:w-auto bg-white text-emerald-900 hover:bg-slate-50 font-black px-12 h-16 rounded-2xl shadow-2xl hover:scale-105 transition-all group border-0 text-lg">
                     Explore Marketplace
                     <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-2 transition-transform" />
